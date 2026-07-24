@@ -124,6 +124,10 @@
       "audience": "agent-runtime"
     },
     {
+      "path": ".agents/skills/certification-coordinator/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
       "path": ".agents/skills/decision-hold-lifecycle/SKILL.md",
       "audience": "agent-runtime"
     },
@@ -205,6 +209,10 @@
     },
     {
       "path": "docs/cd-guard.md",
+      "audience": "maintainer-architecture"
+    },
+    {
+      "path": "docs/certification-coordinator.md",
       "audience": "maintainer-architecture"
     },
     {
