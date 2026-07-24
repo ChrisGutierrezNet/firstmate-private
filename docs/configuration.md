@@ -17,6 +17,7 @@ The tracked code root contains the shared instruction, skill, documentation, wor
 `bin/fm-spawn.sh` owns the base task-metadata fields it emits, while the runtime-backend section below owns backend-specific fields and selector interpretation.
 The producing PR and X helpers own the fields they append, `bin/fm-classify-lib.sh` owns status-event vocabulary, and `bin/fm-crew-state.sh` owns current-state reconciliation.
 Wake, watcher, away-mode, and X-specific state mechanics remain with their named scripts and reference sections rather than being duplicated into one exhaustive state tree here.
+Final heavy certification coordination is intentionally machine-global rather than home-local, so its durable root defaults to `~/.no-mistakes/firstmate-certification`; [`docs/certification-coordinator.md`](certification-coordinator.md) owns that state model and authority boundary.
 
 `bin/fm-session-start.sh`'s header is the single owner of session-start ordering, composed commands, digest contents, and the digest's startup mechanism.
 `docs/sessionstart-nudge.md` owns the native session-open adapter mechanics that nudge the digest command.
@@ -112,6 +113,14 @@ Directives are `off` (a position-independent kill switch that disables every act
 An absent file means `auto`, i.e. default-on on macOS: the alarm exists precisely so a wedged away-mode primary is never silent, and it fires at most once per max-defer window after a genuine wedge.
 A missing or failing channel logs and falls through to the next, never crashing the daemon.
 See [`wedge-alarm.md`](wedge-alarm.md) for the current channel reference, [`verification/supervision.md`](verification/supervision.md#wedge-alarm-channels) for active evidence, and [`examples/wedge-alarm`](examples/wedge-alarm) for a copyable config.
+
+## Final certification capacity
+
+`bin/fm-certification.sh` admits final heavy No Mistakes certifications through one machine-global durable queue while implementation and focused tests continue independently.
+Capacity defaults to one and can be supplied as a positive `FM_CERTIFICATION_CAPACITY` when the shared ledger is first created.
+The durable capacity file then wins: a different caller value is refused rather than allowing homes to disagree.
+Changing shared capacity is a captain decision and must be made only while accounting for every live admission.
+Command mechanics live in the script header and help, while [`docs/certification-coordinator.md`](certification-coordinator.md) is the design owner.
 
 ## Gate defaults (.no-mistakes.yaml)
 
@@ -366,6 +375,8 @@ FM_STATE_OVERRIDE=       # alternate state dir, mainly for tests
 FM_DATA_OVERRIDE=        # alternate data dir, mainly for tests
 FM_PROJECTS_OVERRIDE=    # alternate projects dir, mainly for tests
 FM_CONFIG_OVERRIDE=      # alternate config dir, mainly for tests
+FM_CERTIFICATION_ROOT=   # optional machine-global final-certification ledger root; default ~/.no-mistakes/firstmate-certification
+FM_CERTIFICATION_CAPACITY=1  # positive shared final-certification capacity; must match the durable initialized value
 FM_PROC_ROOT_OVERRIDE=   # alternate /proc root for the Linux process-identity read in fm-wake-lib.sh, mainly for tests
 FM_BACKEND=             # optional runtime backend override for new spawns; tmux/herdr/zellij/orca/cmux support ship/scout spawns, codex-app is not accepted
 HERDR_SESSION=default  # herdr-only: named session for normal backend ops; not enough for destructive cleanup (docs/herdr-backend.md)

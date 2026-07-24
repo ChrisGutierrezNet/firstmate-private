@@ -127,6 +127,9 @@ This preserves launch success instead of passing a known-bad value.
 
 ## no-mistakes skill invocation
 
+Final heavy Firstmate certifications do not use these harness-specific forms.
+Load `certification-coordinator` and enqueue the exact committed head so its backend-neutral token-bound shell command admits and steers the worker.
+The forms below remain reference for non-coordinated skill verification and other non-final use.
 Send the validation skill using the target harness's skill invocation form.
 Natural language is acceptable if uncertain.
 

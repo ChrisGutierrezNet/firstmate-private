@@ -33,14 +33,17 @@
 #                       when this session actually holds the lock.
 #   3. wake-drain     - mutates the durable wake queue, so it also only runs
 #                       when locked.
-#   4. context digest - data/projects.md, data/secondmates.md, data/captain.md,
+#   4. certification - when locked, reconciles the optional machine-global
+#                       final-certification queue and notifies newly admitted
+#                       workers. It is inert when no queue exists.
+#   5. context digest - data/projects.md, data/secondmates.md, data/captain.md,
 #                       data/captain-shared.md, data/learnings.md: read-only,
 #                       always safe, always runs.
-#   5. fleet digest   - a compact data/backlog.md identity/metadata listing,
+#   6. fleet digest   - a compact data/backlog.md identity/metadata listing,
 #                       every state/*.meta, a bounded state/*.status tail,
 #                       state/.afk, and a cheap per-task endpoint-liveness read:
 #                       read-only, always runs.
-#   6. closing reminder - prints the context-specific watcher next step; this
+#   7. closing reminder - prints the context-specific watcher next step; this
 #                       script points back to the emitted harness supervision
 #                       block and deliberately never arms the watcher itself.
 #
@@ -299,7 +302,26 @@ else
   fi
 fi
 
-# --- 4. supervision operating instructions ----------------------------------
+# --- 4. durable final-certification recovery -------------------------------
+# Reconciliation is a mutation because it can release an authoritative terminal
+# slot and submit the next worker instruction. A lock-refused session must not do
+# either. The owner is inert and silent until its shared queue has been created.
+subsection "FINAL CERTIFICATION"
+if [ "$READ_ONLY" -eq 1 ]; then
+  printf 'skipped (read-only session)\n'
+else
+  CERT_OUT=$(FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-certification.sh" reconcile --notify 2>&1)
+  CERT_RC=$?
+  if [ -n "$CERT_OUT" ]; then
+    printf '%s\n' "$CERT_OUT"
+  elif [ "$CERT_RC" -eq 0 ]; then
+    printf '(no certification transition)\n'
+  else
+    printf 'certification reconciliation failed without a diagnostic\n'
+  fi
+fi
+
+# --- 5. supervision operating instructions ----------------------------------
 AFK_PRESENT=0
 [ -e "$STATE/.afk" ] && AFK_PRESENT=1
 X_MODE_PRESENT=0

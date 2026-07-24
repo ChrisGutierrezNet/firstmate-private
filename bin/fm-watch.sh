@@ -679,6 +679,20 @@ while :; do
   # alive. Supervision scripts warn when this goes stale with tasks in flight.
   touch "$STATE/.last-watcher-beat"
 
+  # Durable final-certification reconciliation is backend- and harness-neutral.
+  # It is inert until a shared queue exists, releases capacity only from an
+  # authoritative terminal no-mistakes result, and submits each newly admitted
+  # worker instruction at most once. Successful admission/advancement is routine;
+  # only a safety refusal needs to wake firstmate.
+  CERT_OUT=$(FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-certification.sh" reconcile --notify 2>&1)
+  CERT_RC=$?
+  if [ "$CERT_RC" -ne 0 ] && [ -n "$CERT_OUT" ]; then
+    CERT_REASON=$(printf '%s' "$CERT_OUT" | tr '\n' ';' | sed 's/;*$//')
+    reason="check: certification coordinator: $CERT_REASON"
+    fm_wake_append check certification-coordinator "$reason" || exit 1
+    wake "$reason"
+  fi
+
   # Parent-owned secondmate pending-reply reconciliation: resolve correlated
   # parent reports, observe backend busy/idle turn completion, send one recovery
   # repost after grace, and escalate once if the recovery turn is also missed.
