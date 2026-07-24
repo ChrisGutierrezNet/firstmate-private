@@ -6,6 +6,7 @@ This document records the design and safety rationale without duplicating the sc
 ## Scope
 
 The coordinator governs final heavy No Mistakes certifications only.
+Admission deterministically requires a `ship` task whose delivery mode is `no-mistakes`; direct-PR and local-only work is refused at enqueue and again at every preflight so it can never be injected into No Mistakes by coordinator error.
 Implementation, focused tests, ordinary worker activity, direct-PR delivery, and local-only delivery remain outside its capacity accounting and continue in parallel.
 The ordinary backlog remains the owner of task lifecycle and dependencies, while the certification ledger records only final-validation admission and never moves or duplicates backlog items.
 The default shared capacity is one.
@@ -15,8 +16,10 @@ The ledger defaults to `~/.no-mistakes/firstmate-certification`, so primary and 
 ## Safety invariants
 
 - Every state mutation holds the single machine-global coordinator lock.
+- Before any capacity or ownership accounting, every record is validated for the exact supported schema version, required fields, canonical task and head identity, and a known state; a record that fails is quarantined under the shared root and never establishes capacity, ownership, or admission.
 - FIFO sequence is durable, and blocked ineligible work does not strand the next eligible request.
 - Live records never exceed the durable configured capacity.
+- Admission and every preflight require a `ship` task whose delivery mode is `no-mistakes`.
 - Admission binds one Firstmate home, task identity, ship metadata record, project local copy, isolated copy, attached branch, and exact expected commit.
 - Both admission and worker start repeat preflight against current facts.
 - Detached HEAD, wrong branch, changed head, dirty isolated copy, non-isolated location, missing or changed task metadata, uncoordinated active validation, obsolete custody, or ambiguous tool output refuses certification.
@@ -36,7 +39,10 @@ Reconciliation moves `launching` to `running` once a matching active run is auth
 A matching authoritative final result moves `launching` or `running` to `terminal`, releases capacity, and immediately considers the next queued request.
 An ambiguous run identity retains the live state and capacity instead of guessing ownership.
 `retry` may move a corrected `blocked` request back to `queued`, or explicitly retry a failed or ambiguous notification, without changing its bound branch or expected head.
+A `launching` or `running` record whose worker left no matching No Mistakes run keeps its slot but reconciliation reports the stall with a nonzero result so session-start and watch prompt an explicit `retry` or `withdraw` instead of stranding every queued request silently.
 A changed expected head requires a new explicit request rather than silent rebinding.
+`withdraw` abandons a request and frees its slot so a corrected head can be re-enqueued, but it refuses to cancel a matching active or terminal run because that gate stays under worker authority; the withdrawn record and its intent are archived under the shared root for evidence.
+Reaching `terminal` deletes the record's full intent text, and terminal records beyond the newest configured retention count are pruned with their intent so monitoring and storage cost stay bounded.
 
 ## Crash and restart recovery
 
@@ -55,6 +61,7 @@ No recovery path changes Git history or invokes No Mistakes custody recovery.
 ## Authority boundary
 
 Admission, read-only reconciliation, one worker steer, retry after a proven failed delivery, and advancement after an authoritative terminal result are automatic reversible actions.
+Withdrawing a request frees its coordinator slot and archives evidence, but it never cancels an in-flight or terminal No Mistakes run, so it grants no discarded-work or cancellation authority.
 Changing shared capacity, discarding or rewriting work, cancelling a run, selecting keep-local custody recovery, restarting the shared daemon, and any existing destructive, irreversible, security-sensitive, merge, delivery-mode, or product decision retain their existing captain authority.
 The coordinator does not reinterpret project `yolo` posture and never grants merge or gate-decision authority.
 
@@ -70,4 +77,4 @@ Worker-owned synchronous No Mistakes execution remains unchanged across all five
 ## Evidence
 
 Focused behavior coverage lives in `tests/fm-certification.test.sh`.
-The suite covers concurrent admission, restart reconciliation, detached and wrong branches, changed expected heads, obsolete custody, preserved unpublished work, uncoordinated active runs, terminal advancement, duplicate-notification suppression, and command failure paths.
+The suite covers concurrent admission, restart reconciliation, detached and wrong branches, changed expected heads, obsolete custody, preserved unpublished work, uncoordinated active runs, terminal advancement, duplicate-notification suppression, command failure paths, non-`no-mistakes` delivery-mode refusal, malformed and version-skewed record quarantine, crashed-launch stall escalation, withdrawal that frees a slot and refuses to cancel an active run, and bounded terminal retention.

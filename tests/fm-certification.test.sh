@@ -234,6 +234,145 @@ test_notification_and_state_read_failures_stop_safely() {
   pass "notification ambiguity and no-mistakes read failures stop safely"
 }
 
+test_non_no_mistakes_delivery_is_refused() {
+  new_fixture
+  local wt h out
+  wt=$(add_task pronly pronly); h=$(head_of "$wt")
+  fm_write_meta "$HOME_DIR/state/pronly.meta" \
+    "window=fm-pronly" "worktree=$wt" "project=$FIX/pronly-primary" "harness=pi" \
+    "kind=ship" "mode=direct-PR" "yolo=off"
+  if out=$(run_cert enqueue pronly "$h" --intent-file "$HOME_DIR/data/pronly/intent" 2>&1); then fail "non-no-mistakes delivery was admitted"; fi
+  assert_contains "$out" "delivery mode" "delivery-mode refusal was not actionable"
+  [ -z "$(record_for pronly 2>/dev/null)" ] || fail "a non-no-mistakes request entered the ledger"
+  pass "final certification refuses non-no-mistakes delivery modes"
+}
+
+test_withdraw_frees_slot_and_allows_new_head() {
+  new_fixture
+  local wt1 wt2 h1 h2 h1b
+  wt1=$(add_task hold hold); wt2=$(add_task waiting waiting)
+  h1=$(head_of "$wt1"); h2=$(head_of "$wt2")
+  run_cert enqueue hold "$h1" --intent-file "$HOME_DIR/data/hold/intent" >/dev/null
+  run_cert enqueue waiting "$h2" --intent-file "$HOME_DIR/data/waiting/intent" >/dev/null
+  assert_state hold admitted
+  assert_state waiting queued
+  printf change >> "$wt1/README.md"
+  git -C "$wt1" add README.md && git -C "$wt1" -c user.name=test -c user.email=test@example.invalid commit -qm advanced
+  h1b=$(head_of "$wt1")
+  run_cert withdraw hold >/dev/null
+  [ -z "$(record_for hold 2>/dev/null)" ] || fail "withdrawn record still present in queue"
+  [ -n "$(find "$CERT/withdrawn" -name '*-hold.record' -print 2>/dev/null | head -1)" ] || fail "withdrawn record was not archived for evidence"
+  assert_state waiting admitted
+  run_cert enqueue hold "$h1b" --intent-file "$HOME_DIR/data/hold/intent" >/dev/null
+  assert_state hold queued
+  pass "withdraw frees the slot, advances the queue, and permits a corrected head"
+}
+
+test_withdraw_refuses_to_cancel_active_run() {
+  new_fixture
+  local wt h rec token out
+  wt=$(add_task busy busy); h=$(head_of "$wt")
+  run_cert enqueue busy "$h" --intent-file "$HOME_DIR/data/busy/intent" >/dev/null
+  rec=$(record_for busy); token=$(field "$rec" token)
+  run_cert start busy "$token" >/dev/null
+  cat > "$wt/.nm-status" <<EOF
+id: run-busy
+branch: fm/busy
+head: $h
+status: running
+outcome:
+EOF
+  git -C "$wt" add -N .nm-status >/dev/null 2>&1 || true
+  if out=$(run_cert withdraw busy 2>&1); then fail "withdrawal cancelled an active no-mistakes run"; fi
+  assert_contains "$out" "cannot cancel" "active-run withdrawal refusal was not actionable"
+  assert_no_grep "abort" "$FIX/nm-calls.log" "withdrawal cancelled a run"
+  pass "withdrawal never cancels a matching active run"
+}
+
+test_crashed_launch_stall_is_surfaced() {
+  new_fixture
+  local wt h rec token out
+  wt=$(add_task crashed crashed); h=$(head_of "$wt")
+  run_cert enqueue crashed "$h" --intent-file "$HOME_DIR/data/crashed/intent" >/dev/null
+  rec=$(record_for crashed); token=$(field "$rec" token)
+  run_cert start crashed "$token" >/dev/null
+  assert_state crashed launching
+  if out=$(run_cert reconcile --notify 2>&1); then fail "a stalled launch reconciled as success"; fi
+  assert_contains "$out" "launch stalled" "crashed launch was not surfaced"
+  assert_state crashed launching
+  run_cert withdraw crashed >/dev/null
+  [ -z "$(record_for crashed 2>/dev/null)" ] || fail "stalled launch could not be withdrawn"
+  pass "a crashed launch retains its slot, is surfaced, and can be withdrawn"
+}
+
+test_malformed_and_version_skew_records_are_quarantined() {
+  new_fixture
+  local wt h out
+  wt=$(add_task good good); h=$(head_of "$wt")
+  run_cert enqueue good "$h" --intent-file "$HOME_DIR/data/good/intent" >/dev/null
+  assert_state good admitted
+  cat > "$CERT/queue/000000009999-skew.record" <<EOF
+version=2
+sequence=000000009999
+task=skew
+home=$HOME_DIR
+project=$FIX/good-primary
+worktree=$wt
+branch=fm/skew
+expected_head=$h
+token=deadbeef
+state=admitted
+notification=none
+run_id=
+outcome=
+reason=
+EOF
+  printf 'version=1\nstate=admitted\n' > "$CERT/queue/000000009998-broken.record"
+  if out=$(run_cert reconcile --notify 2>&1); then fail "reconcile ignored the quarantine outcome"; fi
+  assert_contains "$out" "quarantined" "malformed/version-skew record was not surfaced"
+  [ -f "$CERT/quarantine/000000009999-skew.record" ] || fail "version-skew record was not quarantined"
+  [ -f "$CERT/quarantine/000000009998-broken.record" ] || fail "malformed record was not quarantined"
+  [ ! -f "$CERT/queue/000000009999-skew.record" ] || fail "version-skew record still affects the live queue"
+  assert_state good admitted
+  pass "unsupported-version and malformed records are quarantined before accounting"
+}
+
+test_bounded_terminal_retention_prunes_old_records() {
+  new_fixture
+  export FM_CERTIFICATION_RETAIN=2
+  local wt h i seq remaining
+  wt=$(add_task keeper keeper); h=$(head_of "$wt")
+  run_cert enqueue keeper "$h" --intent-file "$HOME_DIR/data/keeper/intent" >/dev/null
+  for i in 1 2 3 4; do
+    seq=$(printf '00000000000%s' "$i")
+    cat > "$CERT/queue/$seq-old$i.record" <<EOF
+version=1
+sequence=$seq
+task=old$i
+home=$HOME_DIR
+project=$FIX/keeper-primary
+worktree=$wt
+branch=fm/old$i
+expected_head=$h
+token=tok$i
+state=terminal
+notification=sent
+run_id=run-$i
+outcome=passed
+reason=
+EOF
+    printf 'intent %s\n' "$i" > "$CERT/queue/$seq-old$i.intent"
+  done
+  run_cert reconcile --notify >/dev/null 2>&1 || true
+  remaining=$(find "$CERT/queue" -name '*.record' -exec grep -l '^state=terminal' {} + 2>/dev/null | wc -l | tr -d ' ')
+  [ "$remaining" -eq 2 ] || fail "expected 2 retained terminal records, found $remaining"
+  [ -f "$CERT/queue/000000000004-old4.record" ] || fail "newest terminal record was pruned"
+  [ ! -f "$CERT/queue/000000000001-old1.record" ] || fail "oldest terminal record was retained past the bound"
+  [ ! -f "$CERT/queue/000000000001-old1.intent" ] || fail "pruned terminal intent was retained"
+  unset FM_CERTIFICATION_RETAIN
+  pass "terminal retention keeps the newest records and prunes older intent"
+}
+
 test_concurrent_admission_and_duplicate_notification
 test_duplicate_start_claim_is_refused
 test_restart_terminal_advances_queue
@@ -243,3 +382,9 @@ test_unpublished_dirty_work_is_preserved
 test_active_uncoordinated_run_blocks
 test_restart_hooks_own_automatic_reconciliation
 test_notification_and_state_read_failures_stop_safely
+test_non_no_mistakes_delivery_is_refused
+test_withdraw_frees_slot_and_allows_new_head
+test_withdraw_refuses_to_cancel_active_run
+test_crashed_launch_stall_is_surfaced
+test_malformed_and_version_skew_records_are_quarantined
+test_bounded_terminal_retention_prunes_old_records

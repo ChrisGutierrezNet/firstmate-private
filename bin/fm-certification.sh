@@ -27,6 +27,10 @@
 #     Requeues a blocked request without changing its expected branch or head,
 #     or explicitly retries a failed/ambiguous notification or unbound launch
 #     after inspection proves no matching active run exists.
+#   fm-certification.sh withdraw <task-id>
+#     Abandons a request and frees its slot so a corrected head can be
+#     re-enqueued. Refuses to cancel a matching active or terminal run; the
+#     record and its intent are archived under the shared root for evidence.
 #   fm-certification.sh status
 #     Prints the durable queue in sequence order without mutation.
 #
@@ -34,6 +38,8 @@
 #   FM_CERTIFICATION_ROOT   shared durable root (default ~/.no-mistakes/firstmate-certification)
 #   FM_CERTIFICATION_CAPACITY positive configured capacity (default 1). The first
 #                           mutation records it durably; later mismatches refuse.
+#   FM_CERTIFICATION_RETAIN positive count of newest terminal records to retain
+#                           (default 100). Older terminal records and their intent are pruned.
 #   FM_CERT_NM_BIN          no-mistakes executable (default no-mistakes)
 #   FM_CERT_SEND_BIN        fm-send executable (default tracked fm-send.sh)
 #   FM_CERT_TIMEOUT         read-only CLI timeout seconds (default 15)
@@ -51,7 +57,10 @@ STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 CERT_ROOT="${FM_CERTIFICATION_ROOT:-${NO_MISTAKES_HOME:-$HOME/.no-mistakes}/firstmate-certification}"
 QUEUE="$CERT_ROOT/queue"
 LOCK="$CERT_ROOT/.lock"
+QUARANTINE="$CERT_ROOT/quarantine"
+WITHDRAWN="$CERT_ROOT/withdrawn"
 CAPACITY_REQUESTED="${FM_CERTIFICATION_CAPACITY:-1}"
+RETAIN_REQUESTED="${FM_CERTIFICATION_RETAIN:-100}"
 NM_BIN="${FM_CERT_NM_BIN:-no-mistakes}"
 SEND_BIN="${FM_CERT_SEND_BIN:-$SCRIPT_DIR/fm-send.sh}"
 NM_TIMEOUT="${FM_CERT_TIMEOUT:-15}"
@@ -59,18 +68,20 @@ NM_TIMEOUT="${FM_CERT_TIMEOUT:-15}"
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
 
-usage() { sed -n '2,39p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,46p' "$0" | sed 's/^# \{0,1\}//'; }
 die() { echo "error: $*" >&2; exit 1; }
 usage_die() { echo "error: $*" >&2; usage >&2; exit 2; }
 
 case "$CAPACITY_REQUESTED" in ''|*[!0-9]*|0) die "FM_CERTIFICATION_CAPACITY must be a positive integer" ;; esac
+case "$RETAIN_REQUESTED" in ''|*[!0-9]*|0) die "FM_CERTIFICATION_RETAIN must be a positive integer" ;; esac
 case "$NM_TIMEOUT" in ''|*[!0-9]*|0) die "FM_CERT_TIMEOUT must be a positive integer" ;; esac
 
 mkdir_private() {
   umask 077
-  mkdir -p "$CERT_ROOT" "$QUEUE"
+  mkdir -p "$CERT_ROOT" "$QUEUE" "$QUARANTINE" "$WITHDRAWN"
   [ ! -L "$CERT_ROOT" ] && [ ! -L "$QUEUE" ] || die "certification state paths must not be symlinks: $CERT_ROOT"
-  chmod 0700 "$CERT_ROOT" "$QUEUE" 2>/dev/null || true
+  [ ! -L "$QUARANTINE" ] && [ ! -L "$WITHDRAWN" ] || die "certification state paths must not be symlinks: $CERT_ROOT"
+  chmod 0700 "$CERT_ROOT" "$QUEUE" "$QUARANTINE" "$WITHDRAWN" 2>/dev/null || true
 }
 
 lock_acquire() {
@@ -112,6 +123,54 @@ record_for_task() {
     return 0
   done
   return 1
+}
+
+RECORD_STATES="queued admitted launching running blocked terminal"
+record_schema_ok() { # <record>
+  local rec=$1 field state seq
+  [ "$(record_field "$rec" version)" = 1 ] || return 1
+  for field in sequence task home project worktree branch expected_head token state; do
+    [ -n "$(record_field "$rec" "$field")" ] || return 1
+  done
+  seq=$(record_field "$rec" sequence)
+  case "$seq" in ''|*[!0-9]*) return 1 ;; esac
+  valid_task_id "$(record_field "$rec" task)" || return 1
+  valid_head "$(record_field "$rec" expected_head)" || return 1
+  state=$(record_field "$rec" state)
+  case " $RECORD_STATES " in *" $state "*) return 0 ;; *) return 1 ;; esac
+}
+
+quarantine_sweep() { # sets QUARANTINED=1 and returns 1 if any record was quarantined
+  local rec base rc=0
+  for rec in "$QUEUE"/*.record; do
+    [ -f "$rec" ] || continue
+    record_schema_ok "$rec" && continue
+    base=$(basename "$rec" .record)
+    mv "$rec" "$QUARANTINE/$base.record" 2>/dev/null || true
+    [ ! -f "$QUEUE/$base.intent" ] || mv "$QUEUE/$base.intent" "$QUARANTINE/$base.intent" 2>/dev/null || true
+    echo "certification record quarantined (unsupported version or malformed schema): $base" >&2
+    rc=1
+  done
+  return "$rc"
+}
+
+retention_sweep() { # prune terminal records beyond the newest RETAIN_REQUESTED
+  local rec base n=0 sorted
+  sorted=$(for rec in "$QUEUE"/*.record; do
+    [ -f "$rec" ] || continue
+    [ "$(record_field "$rec" state)" = terminal ] || continue
+    printf '%s\n' "$rec"
+  done | sort -r)
+  [ -n "$sorted" ] || return 0
+  while IFS= read -r rec; do
+    [ -n "$rec" ] || continue
+    n=$((n + 1))
+    [ "$n" -gt "$RETAIN_REQUESTED" ] || continue
+    base=$(basename "$rec" .record)
+    rm -f "$rec" "$QUEUE/$base.intent" 2>/dev/null || true
+  done <<EOF
+$sorted
+EOF
 }
 
 record_write() { # <record> <state> <notification> <run-id> <outcome> <reason>
@@ -197,6 +256,7 @@ preflight() { # <record> [allow-self-active]
   meta="$home/state/$task.meta"
   [ -f "$meta" ] && [ ! -L "$meta" ] || { PREFLIGHT_REASON="task metadata is missing or ambiguous at $meta"; return 1; }
   [ "$(meta_value "$meta" kind)" = ship ] || { PREFLIGHT_REASON="task $task is not a ship task"; return 1; }
+  [ "$(meta_value "$meta" mode)" = no-mistakes ] || { PREFLIGHT_REASON="task $task delivery mode is $(meta_value "$meta" mode); final certification admits only no-mistakes delivery, never direct-PR or local-only"; return 1; }
   [ "$(meta_value "$meta" worktree)" = "$wt" ] || { PREFLIGHT_REASON="task $task metadata no longer names intended isolated copy $wt"; return 1; }
   [ "$(meta_value "$meta" project)" = "$project" ] || { PREFLIGHT_REASON="task $task metadata no longer names intended project $project"; return 1; }
   wt_real=$(physical_dir "$wt" 2>/dev/null) || { PREFLIGHT_REASON="isolated copy is unavailable: $wt"; return 1; }
@@ -324,6 +384,9 @@ notify_record() {
 
 reconcile_locked() { # <notify 0|1>
   local do_notify=$1 rec st notification live rc=0
+  # Records with an unsupported version or malformed schema never establish
+  # capacity or ownership: quarantine them before any accounting loop runs.
+  quarantine_sweep || rc=1
   # Terminal reconciliation is authoritative only for records that reached the
   # worker-side start command. Merely admitted work holds its slot until then.
   for rec in "$QUEUE"/*.record; do
@@ -334,6 +397,7 @@ reconcile_locked() { # <notify 0|1>
       case "$RUN_KIND" in
         terminal)
           record_write "$rec" terminal "$(record_field "$rec" notification)" "$RUN_ID" "$RUN_OUTCOME" ""
+          rm -f "${rec%.record}.intent" 2>/dev/null || true
           echo "certification terminal: $(record_field "$rec" task) outcome=$RUN_OUTCOME"
           ;;
         active)
@@ -342,6 +406,15 @@ reconcile_locked() { # <notify 0|1>
         ambiguous)
           record_write "$rec" "$st" "$(record_field "$rec" notification)" "$(record_field "$rec" run_id)" "" "$RUN_REASON"
           echo "certification ownership ambiguous: $(record_field "$rec" task): $RUN_REASON" >&2
+          rc=1
+          ;;
+        none)
+          # Launch custody was recorded but no matching run is visible: a worker
+          # likely crashed between claiming the slot and no-mistakes starting.
+          # Retain the slot (never auto-relaunch) but surface the stall so
+          # session-start/watch reconciliation prompts an explicit retry or withdraw.
+          record_write "$rec" "$st" "$(record_field "$rec" notification)" "$(record_field "$rec" run_id)" "" "launch custody holds a slot but no matching no-mistakes run is visible; inspect then retry or withdraw"
+          echo "certification launch stalled: $(record_field "$rec" task): no matching run visible; inspect then retry or withdraw" >&2
           rc=1
           ;;
       esac
@@ -373,6 +446,8 @@ reconcile_locked() { # <notify 0|1>
       notify_record "$rec" || rc=1
     done
   fi
+
+  retention_sweep
   return "$rc"
 }
 
@@ -389,6 +464,8 @@ command_enqueue() {
   project=$(meta_value "$meta" project)
   wt=$(meta_value "$meta" worktree)
   [ -n "$project" ] && [ -n "$wt" ] || die "task metadata lacks project/worktree for $task"
+  [ "$(meta_value "$meta" kind)" = ship ] || die "task $task is not a ship task; final certification admits only ship tasks"
+  [ "$(meta_value "$meta" mode)" = no-mistakes ] || die "task $task delivery mode is $(meta_value "$meta" mode); final certification admits only no-mistakes delivery, never direct-PR or local-only"
   branch=$(git -C "$wt" symbolic-ref --quiet --short HEAD 2>/dev/null || true)
   [ -n "$branch" ] || die "detached HEAD in $wt; attach the intended task branch before enqueueing certification"
   if ! { single_line_value "$FM_HOME" && single_line_value "$project" \
@@ -399,6 +476,7 @@ command_enqueue() {
   [ "$actual" = "$expected" ] || die "expected head $expected does not match task head ${actual:-unknown}"
   lock_acquire
   capacity_ensure
+  quarantine_sweep || true
   existing=$(record_for_task "$task" "$FM_HOME" || true)
   if [ -n "$existing" ]; then
     [ "$(record_field "$existing" expected_head)" = "$expected" ] || die "task $task already has a certification request for a different expected head"
@@ -445,6 +523,7 @@ command_start() {
   valid_task_id "$task" || usage_die "invalid task id '$task'"
   lock_acquire
   capacity_ensure
+  quarantine_sweep || true
   rec=$(record_for_task "$task" "$FM_HOME" || true)
   [ -n "$rec" ] || die "no certification request for task $task in FM_HOME $FM_HOME"
   [ "$(record_field "$rec" token)" = "$token" ] || die "admission token does not match task $task"
@@ -494,6 +573,7 @@ command_retry() {
   [ $# -eq 1 ] || usage_die "retry requires <task-id>"
   lock_acquire
   capacity_ensure
+  quarantine_sweep || true
   rec=$(record_for_task "$task" "$FM_HOME" || true)
   [ -n "$rec" ] || die "no certification request for task $task"
   state=$(record_field "$rec" state)
@@ -518,6 +598,36 @@ command_retry() {
     ;;
   *) die "task $task is not retryable (state=$state)" ;;
   esac
+  reconcile_locked 1
+  lock_release
+}
+
+command_withdraw() {
+  local task=${1:-} rec state base
+  [ $# -eq 1 ] || usage_die "withdraw requires <task-id>"
+  valid_task_id "$task" || usage_die "invalid task id '$task'"
+  lock_acquire
+  capacity_ensure
+  quarantine_sweep || true
+  rec=$(record_for_task "$task" "$FM_HOME" || true)
+  [ -n "$rec" ] || die "no certification request for task $task"
+  state=$(record_field "$rec" state)
+  # Withdrawal abandons a request and frees its slot. It never cancels an
+  # in-flight No Mistakes run: a matching active or terminal run stays under the
+  # worker's gate authority, so those are refused.
+  case "$state" in launching|running)
+    inspect_record_run "$rec"
+    case "$RUN_KIND" in
+      active) die "task $task has a matching active no-mistakes run; withdrawal cannot cancel it — the worker owns that gate" ;;
+      terminal) die "task $task already has authoritative terminal outcome $RUN_OUTCOME; reconcile instead of withdrawing" ;;
+      ambiguous) die "$RUN_REASON" ;;
+    esac
+    ;;
+  esac
+  base=$(basename "$rec" .record)
+  mv "$rec" "$WITHDRAWN/$base.record" 2>/dev/null || die "cannot archive withdrawn record for $task"
+  [ ! -f "$QUEUE/$base.intent" ] || mv "$QUEUE/$base.intent" "$WITHDRAWN/$base.intent" 2>/dev/null || true
+  echo "certification withdrawn: $task (was $state); re-enqueue with a fresh expected head to resubmit"
   reconcile_locked 1
   lock_release
 }
@@ -547,6 +657,7 @@ case "$cmd" in
   reconcile) command_reconcile "$@" ;;
   start) command_start "$@" ;;
   retry) command_retry "$@" ;;
+  withdraw) command_withdraw "$@" ;;
   status) command_status "$@" ;;
   *) usage_die "unknown command '$cmd'" ;;
 esac
