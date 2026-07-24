@@ -26,7 +26,8 @@
 #   fm-certification.sh retry <task-id>
 #     Requeues a blocked request without changing its expected branch or head,
 #     or explicitly retries a failed/ambiguous notification or unbound launch
-#     after inspection proves no matching active run exists.
+#     after inspection proves no matching active run exists and the launch grace
+#     has elapsed, so retry never re-drives a still-registering launch.
 #   fm-certification.sh withdraw <task-id>
 #     Abandons a request and frees its slot so a corrected head can be
 #     re-enqueued. Refuses to cancel a matching active or terminal run; the
@@ -72,7 +73,7 @@ NM_TIMEOUT="${FM_CERT_TIMEOUT:-15}"
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
 
-usage() { sed -n '2,49p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,50p' "$0" | sed 's/^# \{0,1\}//'; }
 die() { echo "error: $*" >&2; exit 1; }
 usage_die() { echo "error: $*" >&2; usage >&2; exit 2; }
 
@@ -620,7 +621,12 @@ command_retry() {
   launching|running)
     inspect_record_run "$rec"
     case "$RUN_KIND" in
-      none) record_write "$rec" admitted pending "" "" "" ;;
+      none)
+        if within_launch_grace "$(record_field "$rec" launched_at)"; then
+          die "task $task launched within the last ${LAUNCH_GRACE}s and its run may still be registering; wait for the launch grace to elapse before retrying to avoid an uncoordinated double run"
+        fi
+        record_write "$rec" admitted pending "" "" ""
+        ;;
       active) die "task $task already has a matching active run; use its token-bound start command only to reattach" ;;
       terminal) die "task $task already has authoritative terminal outcome $RUN_OUTCOME; reconcile instead" ;;
       ambiguous) die "$RUN_REASON" ;;

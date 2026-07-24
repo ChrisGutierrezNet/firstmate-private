@@ -342,6 +342,32 @@ test_withdraw_refused_inside_launch_grace() {
   pass "withdrawal waits out the launch grace before freeing a slot"
 }
 
+test_retry_refused_inside_launch_grace() {
+  new_fixture
+  local wt h rec token out
+  wt=$(add_task rezero rezero); h=$(head_of "$wt")
+  run_cert enqueue rezero "$h" --intent-file "$HOME_DIR/data/rezero/intent" >/dev/null
+  rec=$(record_for rezero); token=$(field "$rec" token)
+  export FM_CERT_NOW=1000
+  run_cert start rezero "$token" >/dev/null
+  assert_state rezero launching
+  [ "$(wc -l < "$SEND_LOG")" -eq 1 ] || fail "launch did not notify exactly once"
+  # Retrying inside the grace window would reset to admitted+pending and re-notify
+  # the worker to start a second run while the first is still registering.
+  FM_CERT_NOW=1050
+  if out=$(run_cert retry rezero 2>&1); then fail "retry inside the launch grace re-drove a still-registering launch"; fi
+  assert_contains "$out" "double run" "in-grace retry refusal was not actionable"
+  assert_state rezero launching
+  [ "$(wc -l < "$SEND_LOG")" -eq 1 ] || fail "in-grace retry duplicated the start notification"
+  # Once the grace elapses with no visible run, retry re-admits and re-notifies once.
+  FM_CERT_NOW=99999
+  run_cert retry rezero >/dev/null
+  assert_state rezero admitted
+  [ "$(wc -l < "$SEND_LOG")" -eq 2 ] || fail "past-grace retry did not redeliver exactly once"
+  unset FM_CERT_NOW
+  pass "retry waits out the launch grace before re-driving a launch"
+}
+
 test_archive_retention_bounds_quarantine_and_withdrawn() {
   new_fixture
   export FM_CERTIFICATION_RETAIN=2
@@ -449,6 +475,7 @@ test_withdraw_frees_slot_and_allows_new_head
 test_withdraw_refuses_to_cancel_active_run
 test_crashed_launch_stall_is_surfaced
 test_withdraw_refused_inside_launch_grace
+test_retry_refused_inside_launch_grace
 test_malformed_and_version_skew_records_are_quarantined
 test_bounded_terminal_retention_prunes_old_records
 test_archive_retention_bounds_quarantine_and_withdrawn

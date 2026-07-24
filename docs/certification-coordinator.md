@@ -58,6 +58,7 @@ A crash before notification leaves a pending notification that reconciliation ca
 A crash during notification leaves an ambiguous delivery that requires explicit inspection and retry rather than a possible duplicate.
 A crash after worker-side launch custody but before No Mistakes starts retains the slot and refuses an automatic second launch.
 After inspection proves no matching run exists, explicit `retry` republishes one token-bound worker instruction; when a matching run does exist, the original start command reattaches to it.
+Like withdrawal, `retry` refuses a `launching` or `running` record still inside its launch grace whose run may only be registering, so a manual retry cannot re-drive a launch into an uncoordinated double run before the grace elapses.
 No recovery path changes Git history or invokes No Mistakes custody recovery.
 
 ## Authority boundary
@@ -79,4 +80,4 @@ Worker-owned synchronous No Mistakes execution remains unchanged across all five
 ## Evidence
 
 Focused behavior coverage lives in `tests/fm-certification.test.sh`.
-The suite covers concurrent admission, restart reconciliation, detached and wrong branches, changed expected heads, obsolete custody, preserved unpublished work, uncoordinated active runs, terminal advancement, duplicate-notification suppression, command failure paths, non-`no-mistakes` delivery-mode refusal, malformed and version-skewed record quarantine, crashed-launch stall escalation only after the launch grace, grace-window suppression of spurious stalls and withdrawals, withdrawal that frees a slot and refuses to cancel an active run, and bounded terminal, quarantine, and withdrawn retention.
+The suite covers concurrent admission, restart reconciliation, detached and wrong branches, changed expected heads, obsolete custody, preserved unpublished work, uncoordinated active runs, terminal advancement, duplicate-notification suppression, command failure paths, non-`no-mistakes` delivery-mode refusal, malformed and version-skewed record quarantine, crashed-launch stall escalation only after the launch grace, grace-window suppression of spurious stalls and refusal of in-grace withdrawal and retry, withdrawal that frees a slot and refuses to cancel an active run, and bounded terminal, quarantine, and withdrawn retention.
