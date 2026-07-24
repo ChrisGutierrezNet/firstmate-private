@@ -39,7 +39,10 @@
 #   FM_CERTIFICATION_CAPACITY positive configured capacity (default 1). The first
 #                           mutation records it durably; later mismatches refuse.
 #   FM_CERTIFICATION_RETAIN positive count of newest terminal records to retain
-#                           (default 100). Older terminal records and their intent are pruned.
+#                           (default 100). Also bounds the quarantine and withdrawn
+#                           archives. Older records and their intent are pruned.
+#   FM_CERTIFICATION_LAUNCH_GRACE positive seconds a launching record may show no
+#                           matching run before reconcile surfaces a stall (default 120).
 #   FM_CERT_NM_BIN          no-mistakes executable (default no-mistakes)
 #   FM_CERT_SEND_BIN        fm-send executable (default tracked fm-send.sh)
 #   FM_CERT_TIMEOUT         read-only CLI timeout seconds (default 15)
@@ -61,6 +64,7 @@ QUARANTINE="$CERT_ROOT/quarantine"
 WITHDRAWN="$CERT_ROOT/withdrawn"
 CAPACITY_REQUESTED="${FM_CERTIFICATION_CAPACITY:-1}"
 RETAIN_REQUESTED="${FM_CERTIFICATION_RETAIN:-100}"
+LAUNCH_GRACE="${FM_CERTIFICATION_LAUNCH_GRACE:-120}"
 NM_BIN="${FM_CERT_NM_BIN:-no-mistakes}"
 SEND_BIN="${FM_CERT_SEND_BIN:-$SCRIPT_DIR/fm-send.sh}"
 NM_TIMEOUT="${FM_CERT_TIMEOUT:-15}"
@@ -68,12 +72,13 @@ NM_TIMEOUT="${FM_CERT_TIMEOUT:-15}"
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
 
-usage() { sed -n '2,46p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,49p' "$0" | sed 's/^# \{0,1\}//'; }
 die() { echo "error: $*" >&2; exit 1; }
 usage_die() { echo "error: $*" >&2; usage >&2; exit 2; }
 
 case "$CAPACITY_REQUESTED" in ''|*[!0-9]*|0) die "FM_CERTIFICATION_CAPACITY must be a positive integer" ;; esac
 case "$RETAIN_REQUESTED" in ''|*[!0-9]*|0) die "FM_CERTIFICATION_RETAIN must be a positive integer" ;; esac
+case "$LAUNCH_GRACE" in ''|*[!0-9]*|0) die "FM_CERTIFICATION_LAUNCH_GRACE must be a positive integer" ;; esac
 case "$NM_TIMEOUT" in ''|*[!0-9]*|0) die "FM_CERT_TIMEOUT must be a positive integer" ;; esac
 
 mkdir_private() {
@@ -110,6 +115,14 @@ capacity_ensure() {
 
 valid_task_id() { case "$1" in ''|*[!A-Za-z0-9._-]*) return 1 ;; *) return 0 ;; esac; }
 valid_head() { printf '%s' "$1" | grep -Eq '^[0-9a-fA-F]{40}$'; }
+is_uint() { case "$1" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac; }
+now_epoch() { printf '%s\n' "${FM_CERT_NOW:-$(date +%s)}"; }
+within_launch_grace() { # <launched-at>
+  local launched=$1 now
+  now=$(now_epoch)
+  is_uint "$launched" && is_uint "$now" || return 1
+  [ "$now" -ge "$launched" ] && [ "$((now - launched))" -lt "$LAUNCH_GRACE" ]
+}
 single_line_value() { case "$1" in *$'\n'*|*$'\r'*) return 1 ;; *) return 0 ;; esac; }
 shell_quote() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
 record_field() { grep "^$2=" "$1" 2>/dev/null | tail -1 | cut -d= -f2- || true; }
@@ -154,27 +167,37 @@ quarantine_sweep() { # sets QUARANTINED=1 and returns 1 if any record was quaran
   return "$rc"
 }
 
-retention_sweep() { # prune terminal records beyond the newest RETAIN_REQUESTED
-  local rec base n=0 sorted
-  sorted=$(for rec in "$QUEUE"/*.record; do
+prune_dir_records() { # <dir> <keep> [state-filter]
+  local dir=$1 keep=$2 filter=${3:-} rec base n=0 sorted
+  sorted=$(for rec in "$dir"/*.record; do
     [ -f "$rec" ] || continue
-    [ "$(record_field "$rec" state)" = terminal ] || continue
+    [ -z "$filter" ] || [ "$(record_field "$rec" state)" = "$filter" ] || continue
     printf '%s\n' "$rec"
   done | sort -r)
   [ -n "$sorted" ] || return 0
   while IFS= read -r rec; do
     [ -n "$rec" ] || continue
     n=$((n + 1))
-    [ "$n" -gt "$RETAIN_REQUESTED" ] || continue
+    [ "$n" -gt "$keep" ] || continue
     base=$(basename "$rec" .record)
-    rm -f "$rec" "$QUEUE/$base.intent" 2>/dev/null || true
+    rm -f "$rec" "$(dirname "$rec")/$base.intent" 2>/dev/null || true
   done <<EOF
 $sorted
 EOF
 }
 
-record_write() { # <record> <state> <notification> <run-id> <outcome> <reason>
-  local rec=$1 new_state=$2 notification=$3 run_id=$4 outcome=$5 reason=$6 tmp
+retention_sweep() {
+  # Keep the newest RETAIN_REQUESTED terminal records in the live queue and the
+  # newest RETAIN_REQUESTED entries of each archive so compact recent audit
+  # evidence is preserved while steady-state storage stays flat.
+  prune_dir_records "$QUEUE" "$RETAIN_REQUESTED" terminal
+  prune_dir_records "$QUARANTINE" "$RETAIN_REQUESTED"
+  prune_dir_records "$WITHDRAWN" "$RETAIN_REQUESTED"
+}
+
+record_write() { # <record> <state> <notification> <run-id> <outcome> <reason> [launched-at]
+  local rec=$1 new_state=$2 notification=$3 run_id=$4 outcome=$5 reason=$6 tmp launched
+  if [ "$#" -ge 7 ]; then launched=$7; else launched=$(record_field "$rec" launched_at); fi
   tmp=$(mktemp "$QUEUE/.record.XXXXXX") || die "cannot create certification record"
   {
     printf 'version=1\n'
@@ -191,6 +214,7 @@ record_write() { # <record> <state> <notification> <run-id> <outcome> <reason>
     printf 'run_id=%s\n' "$run_id"
     printf 'outcome=%s\n' "$outcome"
     printf 'reason=%s\n' "$reason"
+    printf 'launched_at=%s\n' "$launched"
   } > "$tmp"
   chmod 0600 "$tmp"
   mv "$tmp" "$rec"
@@ -409,13 +433,19 @@ reconcile_locked() { # <notify 0|1>
           rc=1
           ;;
         none)
-          # Launch custody was recorded but no matching run is visible: a worker
-          # likely crashed between claiming the slot and no-mistakes starting.
-          # Retain the slot (never auto-relaunch) but surface the stall so
-          # session-start/watch reconciliation prompts an explicit retry or withdraw.
-          record_write "$rec" "$st" "$(record_field "$rec" notification)" "$(record_field "$rec" run_id)" "" "launch custody holds a slot but no matching no-mistakes run is visible; inspect then retry or withdraw"
-          echo "certification launch stalled: $(record_field "$rec" task): no matching run visible; inspect then retry or withdraw" >&2
-          rc=1
+          # Launch custody was recorded but no matching run is visible. Within the
+          # bounded launch grace this is an ordinary run still registering, so the
+          # slot is retained silently. Past the grace a worker likely crashed
+          # between claiming the slot and no-mistakes starting: retain the slot
+          # (never auto-relaunch) but surface the stall so session-start/watch
+          # reconciliation prompts an explicit retry or withdraw.
+          if within_launch_grace "$(record_field "$rec" launched_at)"; then
+            :
+          else
+            record_write "$rec" "$st" "$(record_field "$rec" notification)" "$(record_field "$rec" run_id)" "" "launch custody holds a slot but no matching no-mistakes run is visible after the launch grace; inspect then retry or withdraw"
+            echo "certification launch stalled: $(record_field "$rec" task): no matching run visible after ${LAUNCH_GRACE}s grace; inspect then retry or withdraw" >&2
+            rc=1
+          fi
           ;;
       esac
       ;;
@@ -495,7 +525,7 @@ command_enqueue() {
   mv "$tmp" "$intent_dst"
   tmp=$(mktemp "$QUEUE/.record.XXXXXX") || die "cannot create certification record"
   {
-    printf 'version=1\nsequence=%s\ntask=%s\nhome=%s\nproject=%s\nworktree=%s\nbranch=%s\nexpected_head=%s\ntoken=%s\nstate=queued\nnotification=none\nrun_id=\noutcome=\nreason=\n' \
+    printf 'version=1\nsequence=%s\ntask=%s\nhome=%s\nproject=%s\nworktree=%s\nbranch=%s\nexpected_head=%s\ntoken=%s\nstate=queued\nnotification=none\nrun_id=\noutcome=\nreason=\nlaunched_at=\n' \
       "$seq" "$task" "$FM_HOME" "$project" "$wt" "$branch" "$expected" "$token"
   } > "$tmp"
   chmod 0600 "$tmp"
@@ -554,7 +584,7 @@ command_start() {
       fi
       ;;
   esac
-  record_write "$rec" launching sent "$RUN_ID" "" ""
+  record_write "$rec" launching sent "$RUN_ID" "" "" "$(now_epoch)"
   wt=$(record_field "$rec" worktree)
   expected=$(record_field "$rec" expected_head)
   intent_file="${rec%.record}.intent"
@@ -614,13 +644,20 @@ command_withdraw() {
   state=$(record_field "$rec" state)
   # Withdrawal abandons a request and frees its slot. It never cancels an
   # in-flight No Mistakes run: a matching active or terminal run stays under the
-  # worker's gate authority, so those are refused.
+  # worker's gate authority, so those are refused. A launch inside its grace
+  # window may still be registering its run, so withdrawal waits rather than
+  # freeing the slot into an uncoordinated double run.
   case "$state" in launching|running)
     inspect_record_run "$rec"
     case "$RUN_KIND" in
       active) die "task $task has a matching active no-mistakes run; withdrawal cannot cancel it — the worker owns that gate" ;;
       terminal) die "task $task already has authoritative terminal outcome $RUN_OUTCOME; reconcile instead of withdrawing" ;;
       ambiguous) die "$RUN_REASON" ;;
+      none)
+        if within_launch_grace "$(record_field "$rec" launched_at)"; then
+          die "task $task launched within the last ${LAUNCH_GRACE}s and its run may still be registering; wait for the launch grace to elapse before withdrawing to avoid an uncoordinated double run"
+        fi
+        ;;
     esac
     ;;
   esac

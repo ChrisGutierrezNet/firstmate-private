@@ -39,10 +39,12 @@ Reconciliation moves `launching` to `running` once a matching active run is auth
 A matching authoritative final result moves `launching` or `running` to `terminal`, releases capacity, and immediately considers the next queued request.
 An ambiguous run identity retains the live state and capacity instead of guessing ownership.
 `retry` may move a corrected `blocked` request back to `queued`, or explicitly retry a failed or ambiguous notification, without changing its bound branch or expected head.
-A `launching` or `running` record whose worker left no matching No Mistakes run keeps its slot but reconciliation reports the stall with a nonzero result so session-start and watch prompt an explicit `retry` or `withdraw` instead of stranding every queued request silently.
+A `launching` or `running` record whose worker left no matching No Mistakes run keeps its slot; within a durable bounded launch grace this is treated as an ordinary run still registering and is not surfaced, but once the grace elapses reconciliation reports the stall with a nonzero result so session-start and watch prompt an explicit `retry` or `withdraw` instead of stranding every queued request silently.
+The launch timestamp is recorded durably on the record when the worker claims the slot, so the grace survives restarts and cannot be reset by reconciliation.
 A changed expected head requires a new explicit request rather than silent rebinding.
-`withdraw` abandons a request and frees its slot so a corrected head can be re-enqueued, but it refuses to cancel a matching active or terminal run because that gate stays under worker authority; the withdrawn record and its intent are archived under the shared root for evidence.
+`withdraw` abandons a request and frees its slot so a corrected head can be re-enqueued, but it refuses to cancel a matching active or terminal run because that gate stays under worker authority, and it refuses a launch still inside its grace window whose run may only be registering, so it never frees a slot into an uncoordinated double run; the withdrawn record and its intent are archived under the shared root for evidence.
 Reaching `terminal` deletes the record's full intent text, and terminal records beyond the newest configured retention count are pruned with their intent so monitoring and storage cost stay bounded.
+The quarantine and withdrawn archives are bounded by the same retention count, keeping recent compact audit evidence while steady-state storage stays flat.
 
 ## Crash and restart recovery
 
@@ -77,4 +79,4 @@ Worker-owned synchronous No Mistakes execution remains unchanged across all five
 ## Evidence
 
 Focused behavior coverage lives in `tests/fm-certification.test.sh`.
-The suite covers concurrent admission, restart reconciliation, detached and wrong branches, changed expected heads, obsolete custody, preserved unpublished work, uncoordinated active runs, terminal advancement, duplicate-notification suppression, command failure paths, non-`no-mistakes` delivery-mode refusal, malformed and version-skewed record quarantine, crashed-launch stall escalation, withdrawal that frees a slot and refuses to cancel an active run, and bounded terminal retention.
+The suite covers concurrent admission, restart reconciliation, detached and wrong branches, changed expected heads, obsolete custody, preserved unpublished work, uncoordinated active runs, terminal advancement, duplicate-notification suppression, command failure paths, non-`no-mistakes` delivery-mode refusal, malformed and version-skewed record quarantine, crashed-launch stall escalation only after the launch grace, grace-window suppression of spurious stalls and withdrawals, withdrawal that frees a slot and refuses to cancel an active run, and bounded terminal, quarantine, and withdrawn retention.

@@ -8,6 +8,7 @@ set -u
 SCRIPT="$ROOT/bin/fm-certification.sh"
 
 new_fixture() {
+  unset FM_CERT_NOW 2>/dev/null || true
   FIX=$(fm_test_tmproot fm-certification)
   HOME_DIR="$FIX/home"
   CERT="$FIX/cert"
@@ -295,14 +296,75 @@ test_crashed_launch_stall_is_surfaced() {
   wt=$(add_task crashed crashed); h=$(head_of "$wt")
   run_cert enqueue crashed "$h" --intent-file "$HOME_DIR/data/crashed/intent" >/dev/null
   rec=$(record_for crashed); token=$(field "$rec" token)
+  export FM_CERT_NOW=1000
   run_cert start crashed "$token" >/dev/null
   assert_state crashed launching
-  if out=$(run_cert reconcile --notify 2>&1); then fail "a stalled launch reconciled as success"; fi
+  [ "$(field "$(record_for crashed)" launched_at)" = 1000 ] || fail "launch timestamp was not durably recorded"
+  # Inside the launch grace, a still-registering run must not be escalated.
+  FM_CERT_NOW=1050
+  run_cert reconcile --notify >/dev/null 2>&1 || fail "a still-launching run inside grace was falsely stalled"
+  assert_state crashed launching
+  # Past the grace window with no visible run, the stall is surfaced with rc=1.
+  FM_CERT_NOW=99999
+  if out=$(run_cert reconcile --notify 2>&1); then fail "a stalled launch past grace reconciled as success"; fi
   assert_contains "$out" "launch stalled" "crashed launch was not surfaced"
   assert_state crashed launching
   run_cert withdraw crashed >/dev/null
-  [ -z "$(record_for crashed 2>/dev/null)" ] || fail "stalled launch could not be withdrawn"
-  pass "a crashed launch retains its slot, is surfaced, and can be withdrawn"
+  [ -z "$(record_for crashed 2>/dev/null)" ] || fail "stalled launch could not be withdrawn past grace"
+  unset FM_CERT_NOW
+  pass "a launch is graced while registering, surfaced past grace, and then withdrawable"
+}
+
+test_withdraw_refused_inside_launch_grace() {
+  new_fixture
+  local wt1 wt2 h1 h2 rec token out
+  wt1=$(add_task fresh fresh); wt2=$(add_task behind behind)
+  h1=$(head_of "$wt1"); h2=$(head_of "$wt2")
+  run_cert enqueue fresh "$h1" --intent-file "$HOME_DIR/data/fresh/intent" >/dev/null
+  run_cert enqueue behind "$h2" --intent-file "$HOME_DIR/data/behind/intent" >/dev/null
+  rec=$(record_for fresh); token=$(field "$rec" token)
+  export FM_CERT_NOW=1000
+  run_cert start fresh "$token" >/dev/null
+  assert_state fresh launching
+  # A launch still inside its grace window is not withdrawable: freeing the slot
+  # now could admit behind while fresh's run is still registering (double run).
+  FM_CERT_NOW=1050
+  if out=$(run_cert withdraw fresh 2>&1); then fail "a launch inside its grace was withdrawn"; fi
+  assert_contains "$out" "double run" "in-grace withdrawal refusal was not actionable"
+  assert_state fresh launching
+  assert_state behind queued
+  # Once the grace elapses with no visible run, withdrawal is allowed and advances behind.
+  FM_CERT_NOW=99999
+  run_cert withdraw fresh >/dev/null
+  [ -z "$(record_for fresh 2>/dev/null)" ] || fail "past-grace withdrawal did not remove the record"
+  assert_state behind admitted
+  unset FM_CERT_NOW
+  pass "withdrawal waits out the launch grace before freeing a slot"
+}
+
+test_archive_retention_bounds_quarantine_and_withdrawn() {
+  new_fixture
+  export FM_CERTIFICATION_RETAIN=2
+  local wt h i seq dir remaining
+  wt=$(add_task anchor anchor); h=$(head_of "$wt")
+  run_cert enqueue anchor "$h" --intent-file "$HOME_DIR/data/anchor/intent" >/dev/null
+  for dir in "$CERT/quarantine" "$CERT/withdrawn"; do
+    for i in 1 2 3 4; do
+      seq=$(printf '00000000000%s' "$i")
+      printf 'version=1\nsequence=%s\ntask=arch%s\nstate=terminal\n' "$seq" "$i" > "$dir/$seq-arch$i.record"
+      printf 'intent %s\n' "$i" > "$dir/$seq-arch$i.intent"
+    done
+  done
+  run_cert reconcile --notify >/dev/null 2>&1 || true
+  for dir in "$CERT/quarantine" "$CERT/withdrawn"; do
+    remaining=$(find "$dir" -name '*.record' 2>/dev/null | wc -l | tr -d ' ')
+    [ "$remaining" -eq 2 ] || fail "expected 2 retained records in $dir, found $remaining"
+    [ -f "$dir/000000000004-arch4.record" ] || fail "newest archive record was pruned in $dir"
+    [ ! -f "$dir/000000000001-arch1.record" ] || fail "oldest archive record survived the bound in $dir"
+    [ ! -f "$dir/000000000001-arch1.intent" ] || fail "pruned archive intent was retained in $dir"
+  done
+  unset FM_CERTIFICATION_RETAIN
+  pass "quarantine and withdrawn archives are bounded by the retention count"
 }
 
 test_malformed_and_version_skew_records_are_quarantined() {
@@ -386,5 +448,7 @@ test_non_no_mistakes_delivery_is_refused
 test_withdraw_frees_slot_and_allows_new_head
 test_withdraw_refuses_to_cancel_active_run
 test_crashed_launch_stall_is_surfaced
+test_withdraw_refused_inside_launch_grace
 test_malformed_and_version_skew_records_are_quarantined
 test_bounded_terminal_retention_prunes_old_records
+test_archive_retention_bounds_quarantine_and_withdrawn
