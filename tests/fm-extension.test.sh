@@ -219,7 +219,7 @@ test_manifest_security_rejections() {
 }
 
 test_activation_and_deactivation_markers() {
-  local tmp generated wrapper unowned out
+  local tmp generated wrapper unowned out owned_empty owned_nested unmarked_empty mismatch_dir escape_target escape_link
   tmp=$(fm_test_tmproot fm-extension-unowned-marker)
   setup_case "$tmp"
   generated="$CASE_HOME/state/extensions/$CASE_ID/generated"
@@ -234,6 +234,7 @@ test_activation_and_deactivation_markers() {
   generated="$CASE_HOME/state/extensions/$CASE_ID/generated"
   wrapper="$generated/wrappers/lint"
   assert_present "$generated/.owner.json" "activation did not write owner marker"
+  assert_present "$generated/wrappers/.owner.json" "activation did not mark generated wrapper directory"
   assert_present "$wrapper" "activation did not write generated wrapper"
   [ -x "$wrapper" ] || fail "generated wrapper is not executable"
   assert_grep "firstmate-extension-generated firstmate.extension.generated/v1 id=$CASE_ID" "$wrapper" \
@@ -244,14 +245,54 @@ test_activation_and_deactivation_markers() {
 
   unowned="$generated/wrappers/unowned"
   printf 'do not remove me\n' > "$unowned"
+  unmarked_empty="$generated/unmarked-empty"
+  mkdir -p "$unmarked_empty"
+  mismatch_dir="$generated/mismatch-empty"
+  mkdir -p "$mismatch_dir"
+  printf '{"api_version":"firstmate.extension.generated/v1","id":"other-extension"}\n' > "$mismatch_dir/.owner.json"
+  owned_empty="$generated/owned-empty"
+  mkdir -p "$owned_empty"
+  cp "$generated/.owner.json" "$owned_empty/.owner.json"
+  owned_nested="$generated/owned-nested/child"
+  mkdir -p "$owned_nested"
+  cp "$generated/.owner.json" "$generated/owned-nested/.owner.json"
+  cp "$generated/.owner.json" "$owned_nested/.owner.json"
+  escape_target="$tmp/escape-target"
+  mkdir -p "$escape_target"
+  cp "$generated/.owner.json" "$escape_target/.owner.json"
+  escape_link="$generated/wrappers/escape-link"
+  ln -s "$escape_target" "$escape_link"
   out=$(fm_ext deactivate "$CASE_ID") || fail "deactivate should succeed: $out"
   assert_absent "$wrapper" "deactivate removed no generated wrapper"
-  assert_absent "$generated/.owner.json" "deactivate did not remove owner marker"
+  assert_present "$generated/.owner.json" "deactivate removed a blocked directory owner marker"
+  assert_present "$generated/wrappers/.owner.json" "deactivate removed a blocked nested directory owner marker"
   assert_present "$unowned" "deactivate removed unowned material"
+  assert_present "$unmarked_empty" "deactivate removed an empty unmarked directory"
+  assert_present "$mismatch_dir" "deactivate removed a mismatched directory"
+  assert_present "$mismatch_dir/.owner.json" "deactivate removed mismatched owner marker"
+  assert_absent "$owned_empty" "deactivate preserved an empty marked directory"
+  assert_absent "$generated/owned-nested" "deactivate preserved a nested marked directory"
+  assert_present "$escape_link" "deactivate removed an unowned symlink escape"
+  assert_present "$escape_target/.owner.json" "deactivate followed a symlink escape"
   rm -f "$unowned"
+  rm -f "$escape_link"
+  rm -rf "$unmarked_empty" "$mismatch_dir"
   out=$(fm_ext deactivate "$CASE_ID") || fail "second deactivate should clean empty dirs: $out"
   assert_absent "$generated" "deactivate did not remove empty generated directory"
   pass "activation and deactivation honor owner markers"
+}
+
+test_deactivation_is_idempotent_without_unowned_material() {
+  local tmp generated out
+  tmp=$(fm_test_tmproot fm-extension-idempotent)
+  setup_case "$tmp"
+  fm_ext activate "$CASE_ID" >/dev/null || fail "activate should succeed"
+  generated="$CASE_HOME/state/extensions/$CASE_ID/generated"
+  out=$(fm_ext deactivate "$CASE_ID") || fail "deactivate should succeed: $out"
+  assert_absent "$generated" "deactivate did not remove owned generated tree"
+  out=$(fm_ext deactivate "$CASE_ID") || fail "second deactivate should be idempotent: $out"
+  assert_contains "$out" "no generated material" "second deactivate did not report idempotent no-op"
+  pass "deactivation is idempotent after owned generated cleanup"
 }
 
 test_wrapper_failure_behavior() {
@@ -321,6 +362,7 @@ test_read_only_no_mistakes_observability() {
 test_valid_manifest_doctor
 test_manifest_security_rejections
 test_activation_and_deactivation_markers
+test_deactivation_is_idempotent_without_unowned_material
 test_wrapper_failure_behavior
 test_isolated_nm_home_repo_command_wrapper
 test_read_only_no_mistakes_observability

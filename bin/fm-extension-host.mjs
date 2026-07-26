@@ -431,7 +431,7 @@ function shellQuote(value) {
   return `'${String(value).replace(/'/g, "'\\''")}'`;
 }
 
-function writeGeneratedFile(file, content) {
+function writeGeneratedFile(file, content, validated) {
   if (fs.existsSync(file)) {
     const st = fs.lstatSync(file);
     if (st.isSymbolicLink() || !st.isFile()) {
@@ -443,7 +443,7 @@ function writeGeneratedFile(file, content) {
     }
   }
   const dir = path.dirname(file);
-  ensureCreatedDirectory(dir);
+  ensureOwnedGeneratedDirectory(dir, validated);
   const tmp = path.join(dir, `.tmp.${process.pid}.${Date.now()}`);
   fs.writeFileSync(tmp, content, { mode: 0o700 });
   fs.renameSync(tmp, file);
@@ -483,20 +483,24 @@ function writeOwnerMarker(file, validated) {
   fs.chmodSync(file, 0o600);
 }
 
+function ensureOwnedGeneratedDirectory(dir, validated) {
+  ensureCreatedDirectory(dir);
+  writeOwnerMarker(path.join(dir, ".owner.json"), validated);
+}
+
 function commandActivate(opts, id) {
   const validated = validateExtension(opts, id);
   const generatedDir = generatedDirFor(validated);
   const wrappersDir = path.join(generatedDir, "wrappers");
-  ensureCreatedDirectory(generatedDir);
-  ensureCreatedDirectory(wrappersDir);
-  writeOwnerMarker(path.join(generatedDir, ".owner.json"), validated);
+  ensureOwnedGeneratedDirectory(generatedDir, validated);
+  ensureOwnedGeneratedDirectory(wrappersDir, validated);
   for (const entrypoint of Object.values(validated.entrypoints)) {
     const wrapper = `#!/usr/bin/env bash
 ${GENERATED_MARKER} id=${validated.id} entrypoint=${entrypoint.name}
 set -u
 exec ${shellQuote(path.join(validated.fmRoot, "bin", "fm-extension.sh"))} --home ${shellQuote(validated.home)} --config ${shellQuote(validated.configPath)} --no-mistakes-bin ${shellQuote(validated.noMistakesBin)} run ${shellQuote(validated.id)} ${shellQuote(entrypoint.name)} -- "$@"
 `;
-    writeGeneratedFile(generatedWrapperPath(validated, entrypoint.name), wrapper);
+    writeGeneratedFile(generatedWrapperPath(validated, entrypoint.name), wrapper, validated);
   }
   process.stdout.write(`fm-extension: activated ${validated.id} generated=${generatedDir}\n`);
 }
@@ -520,6 +524,16 @@ function isOwnedGeneratedFile(file, id) {
     fs.closeSync(fd);
     const head = buffer.subarray(0, bytes).toString("utf8");
     return head.includes(`${GENERATED_MARKER} id=${id} `);
+  } catch {
+    return false;
+  }
+}
+
+function isOwnedGeneratedDirectory(dir, id) {
+  try {
+    const st = fs.lstatSync(dir);
+    if (!st.isDirectory() || st.isSymbolicLink()) return false;
+    return isOwnedGeneratedFile(path.join(dir, ".owner.json"), id);
   } catch {
     return false;
   }
@@ -557,9 +571,14 @@ function commandDeactivate(opts, id) {
   const rootStat = lstatSafe(generatedDir, "generated directory");
   if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) fail(`generated path is not a safe directory: ${generatedDir}`);
   const { files, dirs } = walkFiles(generatedDir);
+  const ownedDirs = dirs.filter((dir) => isInside(generatedDir, dir) && isOwnedGeneratedDirectory(dir, id));
+  const ownedDirSet = new Set(ownedDirs);
   let removed = 0;
   let left = 0;
   for (const file of files) {
+    if (path.basename(file) === ".owner.json" && ownedDirSet.has(path.dirname(file))) {
+      continue;
+    }
     if (isOwnedGeneratedFile(file, id)) {
       fs.unlinkSync(file);
       removed += 1;
@@ -567,12 +586,19 @@ function commandDeactivate(opts, id) {
       left += 1;
     }
   }
-  dirs.sort((a, b) => b.length - a.length);
   for (const dir of dirs) {
+    if (!ownedDirs.includes(dir)) left += 1;
+  }
+  ownedDirs.sort((a, b) => b.length - a.length);
+  for (const dir of ownedDirs) {
     try {
+      const marker = path.join(dir, ".owner.json");
+      const entries = fs.readdirSync(dir).filter((name) => name !== ".owner.json");
+      if (entries.length > 0 || !isOwnedGeneratedFile(marker, id)) continue;
+      fs.unlinkSync(marker);
+      removed += 1;
       fs.rmdirSync(dir);
     } catch {
-      // Non-empty directories are preserved when they contain unmarked material.
     }
   }
   process.stdout.write(`fm-extension: deactivated ${id} removed=${removed} left_unowned=${left}\n`);
