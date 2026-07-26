@@ -59,6 +59,28 @@ The Ahoy first-message boundary was reverified on 2026-07-22 with Pi 0.81.1 and 
 Marked current operational input and the two exact legacy compatibility shapes selected Bearings, while genuine near-miss captain messages remained real boundaries.
 The detailed reconciliation and task chronology stay in the private audit report and PR evidence.
 
+## Pi skill aliases
+
+The Pi-only bare Firstmate skill aliases were verified on 2026-07-26 with Pi 0.82.1.
+The mechanism owner is [`docs/pi-skill-aliases.md`](../pi-skill-aliases.md).
+
+Command:
+
+```sh
+pi --version
+bash tests/fm-pi-skill-aliases.test.sh
+```
+
+Observed output:
+
+```text
+0.82.1
+ok - Pi skill alias extension is tracked, narrow, and dispatches expanded skill content once
+ok - Pi alias handlers preserve args, refuse collisions, and avoid ordinary-chat fallthrough
+ok - Pi RPC command discovery lists bare aliases and native skill commands
+ok - Pi RPC bare /ahoy dispatch enters skill-expanded context once
+```
+
 ## Turn-end guard
 
 The direct and passive mechanisms were validated across all five harnesses on 2026-07-08 through 2026-07-12, with Claude's replacement Stop-owned path revalidated on 2026-07-24.

@@ -124,7 +124,7 @@ family_for_basename() {
     fm-documentation-audiences.test.sh|fm-ensure-agents-md.test.sh|fm-grok-harness.test.sh|\
     fm-kimi-harness.test.sh|fm-herdr-lab.test.sh|fm-instruction-owners.test.sh|fm-lint.test.sh|\
     fm-install-herdr.test.sh|fm-nm-test-contract.test.sh|fm-no-mistakes-ownership.test.sh|\
-    fm-operational-input.test.sh|fm-pi-primary-types.test.sh|\
+    fm-operational-input.test.sh|fm-pi-primary-types.test.sh|fm-pi-skill-aliases.test.sh|\
     fm-send-popup-settle.test.sh|fm-send-settle.test.sh|fm-stow-contract.test.sh|\
     fm-subagent-pretool-check.test.sh|\
     fm-supervision-instructions.test.sh|fm-tmux-submit-busy.test.sh|fm-transition-lib.test.sh|\
@@ -692,6 +692,10 @@ families_for_changed_path() {
       ;;
     .agents/skills/*/SKILL.md)
       printf '%s\n' pure-contract-unit
+      ;;
+    .pi/extensions/fm-primary-skill-aliases.ts)
+      printf '%s\n' "__script__:fm-pi-skill-aliases.test.sh"
+      printf '%s\n' "__script__:fm-pi-primary-types.test.sh"
       ;;
     .github/workflows/ci.yml|.no-mistakes.yaml)
       printf '%s\n' pure-contract-unit

@@ -256,6 +256,10 @@
       "audience": "operator-current"
     },
     {
+      "path": "docs/pi-skill-aliases.md",
+      "audience": "maintainer-architecture"
+    },
+    {
       "path": "docs/scripts.md",
       "audience": "operator-current"
     },

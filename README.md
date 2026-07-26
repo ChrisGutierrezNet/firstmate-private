@@ -68,7 +68,7 @@ Backend-specific setup is linked in [Documentation](#documentation).
 ### Recommended harnesses
 
 **Claude Code, Grok, and Pi are equal co-primary recommendations** for running the primary firstmate session.
-Claude Code uses a tracked Stop hook for tokenless watcher re-arm and rewake, Grok uses background-notify wake cycles, and Pi uses its tracked primary watcher extension.
+Claude Code uses a tracked Stop hook for tokenless watcher re-arm and rewake, Grok uses background-notify wake cycles, and Pi uses tracked primary extensions.
 All three have verified turn-end guard paths when launched with their documented setup.
 Pick whichever one matches your subscription and workflow.
 
@@ -163,7 +163,9 @@ Full architecture - the supervision engine, worktree isolation, secondmates, dis
 ## Built-in skills
 
 Firstmate ships these user-invocable built-in skills.
-Claude and grok use the slash form shown here; codex uses the same names with `$`, such as `$afk`.
+Claude, Grok, and Pi use the slash form shown here; Pi also keeps native `/skill:<name>` commands discoverable.
+Codex uses the same names with `$`, such as `$afk`.
+The Pi alias mechanism is owned by [docs/pi-skill-aliases.md](docs/pi-skill-aliases.md).
 
 | Skill              | What it does                                                                                                                                  |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -197,6 +199,7 @@ Firstmate's skills live in two separate places with different audiences:
 - [docs/orca-backend.md](docs/orca-backend.md) - current setup and limits for the experimental Orca backend.
 - [docs/cmux-backend.md](docs/cmux-backend.md) - current setup, socket security, and limits for the experimental cmux backend.
 - [docs/codex-app-backend.md](docs/codex-app-backend.md) - the current blocked Codex App backend boundary and rollout contract.
+- [docs/pi-skill-aliases.md](docs/pi-skill-aliases.md) - maintainer contract for Pi bare Firstmate skill aliases and unchanged non-Pi harness axes.
 - [docs/verification/runtime-backends.md](docs/verification/runtime-backends.md) - active maintainer verification for runtime backend guarantees.
 - [docs/gitlab-merge-watch.md](docs/gitlab-merge-watch.md) - maintainer verification for GitLab merge watching on arbitrary instances.
 - [docs/turnend-guard.md](docs/turnend-guard.md) - the primary session's current "no turn ends blind" backstop, scope, loop safety, and compatibility limits.

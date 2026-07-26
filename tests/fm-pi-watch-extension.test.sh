@@ -105,12 +105,14 @@ test_tracked_extension_present_and_self_hashing() {
 test_spawn_template_mentions_pi_watch_placeholder() {
   local text
   text=$(cat "$ROOT/bin/fm-spawn.sh")
-  assert_contains "$text" "-e __PITURNEND__ -e __PIWATCH__" "Pi secondmate launch template does not include both primary extensions"
+  assert_contains "$text" "-e __PITURNEND__ -e __PIWATCH__ -e __PIALIASES__" "Pi secondmate launch template does not include the required primary extensions"
   assert_contains "$text" "\$PROJ_ABS/.pi/extensions/fm-primary-pi-watch.ts" "fm-spawn does not point the Pi secondmate watch placeholder at the tracked extension"
+  assert_contains "$text" "\$PROJ_ABS/.pi/extensions/fm-primary-skill-aliases.ts" "fm-spawn does not point the Pi secondmate alias placeholder at the tracked extension"
   assert_not_contains "$text" "fm-pi-watch-extension.sh" "fm-spawn should no longer generate the Pi watch extension before launch"
   assert_contains "$text" "__PITURNEND__" "fm-spawn does not replace the Pi turn-end guard extension placeholder"
   assert_contains "$text" "__PIWATCH__" "fm-spawn does not replace the Pi watch extension placeholder"
-  pass "Pi secondmate launch wiring includes both tracked primary extensions"
+  assert_contains "$text" "__PIALIASES__" "fm-spawn does not replace the Pi skill alias extension placeholder"
+  pass "Pi secondmate launch wiring includes the tracked primary extensions"
 }
 
 test_pi_extension_reports_external_healthy_watcher() {
@@ -1199,7 +1201,7 @@ const hooks = await mod.FmPrimaryWatchArm({
 const event = { event: { type: "session.idle", properties: { sessionID: "session-test" } } };
 writeFileSync(`${process.env.FM_HOME}/state/.lock`, "999999\n");
 await hooks.event(event);
-await new Promise((resolve) => setTimeout(resolve, 120));
+await globalThis.__firstmateOpenCodeWatchArm.ensureArmed("session-test", client);
 if (existsSync(process.env.FM_ARM_LOG)) {
   console.error("watch arm ran without owning the session lock");
   process.exit(1);
@@ -1922,13 +1924,14 @@ EOF
 }
 
 test_opencode_healthy_arm_output_does_not_suppress_guard() {
-  local arm_plugin guard_plugin repo home log guard_log out status
+  local arm_plugin guard_plugin repo home log guard_log release out status
   arm_plugin="$ROOT/.opencode/plugins/fm-primary-watch-arm.js"
   guard_plugin="$ROOT/.opencode/plugins/fm-primary-turnend-guard.js"
   repo="$TMP_ROOT/opencode-external-healthy-root"
   home="$TMP_ROOT/opencode-external-healthy-home"
   log="$TMP_ROOT/opencode-external-healthy-arm.log"
   guard_log="$TMP_ROOT/opencode-external-healthy-guard.log"
+  release="$TMP_ROOT/opencode-external-healthy.release"
   mkdir -p "$repo/bin" "$home/state" "$home/config"
   git init -q "$repo"
   : > "$repo/AGENTS.md"
@@ -1937,15 +1940,21 @@ test_opencode_healthy_arm_output_does_not_suppress_guard() {
 #!/usr/bin/env bash
 printf 'args=%s\n' "$*" >> "${FM_ARM_LOG:?}"
 printf 'watcher: healthy pid=1 (beacon 0s)\n'
+i=0
+while [ "$i" -lt 100 ] && [ ! -e "$FM_RELEASE_FILE" ]; do
+  sleep 0.02
+  i=$((i + 1))
+done
 SH
   cat > "$repo/bin/fm-turnend-guard.sh" <<'SH'
 #!/usr/bin/env bash
+cat >/dev/null
 printf 'guard\n' >> "${FM_GUARD_LOG:?}"
 printf 'guard ran after external healthy watcher\n' >&2
 exit 2
 SH
   chmod +x "$repo/bin/fm-watch-arm.sh" "$repo/bin/fm-turnend-guard.sh"
-  out=$(ARM_PLUGIN="$arm_plugin" GUARD_PLUGIN="$guard_plugin" WORKTREE="$repo" FM_HOME="$home" FM_ARM_LOG="$log" FM_GUARD_LOG="$guard_log" node 2>&1 <<'EOF'
+  out=$(ARM_PLUGIN="$arm_plugin" GUARD_PLUGIN="$guard_plugin" WORKTREE="$repo" FM_HOME="$home" FM_ARM_LOG="$log" FM_GUARD_LOG="$guard_log" FM_RELEASE_FILE="$release" node 2>&1 <<'EOF'
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
@@ -1990,9 +1999,11 @@ if (!promptBody.includes("TURN WOULD END BLIND")) {
   console.error(`missing blind-turn prompt: ${promptBody}`);
   process.exit(1);
 }
+writeFileSync(process.env.FM_RELEASE_FILE, "release\n");
 EOF
 )
   status=$?
+  [ "$status" -eq 0 ] || fail "OpenCode external-healthy test exited $status: $out"
   expect_code 0 "$status" "OpenCode watch plugin must not treat external healthy output as an owned arm"
   [ -z "$out" ] || fail "OpenCode external-healthy test printed output: $out"
   pass "OpenCode healthy arm output does not suppress the turn-end guard"

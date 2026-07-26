@@ -89,6 +89,7 @@ esac
 checkpoint_seconds=${FM_CODEX_WATCH_CHECKPOINT:-180}
 pi_ext="$FM_ROOT/.pi/extensions/fm-primary-pi-watch.ts"
 pi_turnend_ext="$FM_ROOT/.pi/extensions/fm-primary-turnend-guard.ts"
+pi_alias_ext="$FM_ROOT/.pi/extensions/fm-primary-skill-aliases.ts"
 x_mode_env="$CONFIG/x-mode.env"
 
 shell_quote() {
@@ -108,6 +109,7 @@ render_snippet() {
   while IFS= read -r line || [ -n "$line" ]; do
     line=${line//__FM_PI_EXT__/$pi_ext}
     line=${line//__FM_PI_TURNEND_EXT__/$pi_turnend_ext}
+    line=${line//__FM_PI_ALIAS_EXT__/$pi_alias_ext}
     line=${line//__FM_X_MODE_ENV_SH__/$x_mode_env_sh}
     line=${line//__FM_X_MODE_ENV__/$x_mode_env}
     printf '%s\n' "$line"

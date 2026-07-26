@@ -525,6 +525,12 @@ install_pi_watch_extension_fixture() {
   cp "$ROOT/.pi/extensions/fm-primary-pi-watch.ts" "$root/.pi/extensions/fm-primary-pi-watch.ts"
 }
 
+install_pi_alias_extension_fixture() {
+  local root=$1
+  mkdir -p "$root/.pi/extensions"
+  cp "$ROOT/.pi/extensions/fm-primary-skill-aliases.ts" "$root/.pi/extensions/fm-primary-skill-aliases.ts"
+}
+
 write_pi_watch_loaded_marker() {
   local home=$1 root=$2 pid=$3 version
   version=$(hash_file_for_test "$root/.pi/extensions/fm-primary-pi-watch.ts")
@@ -537,10 +543,17 @@ write_pi_turnend_loaded_marker() {
   printf '%s\n%s\n' "$version" "$pid" > "$home/state/.pi-turnend-extension-loaded"
 }
 
+write_pi_alias_loaded_marker() {
+  local home=$1 root=$2 pid=$3 version
+  version=$(hash_file_for_test "$root/.pi/extensions/fm-primary-skill-aliases.ts")
+  printf '%s\n%s\n' "$version" "$pid" > "$home/state/.pi-skill-aliases-extension-loaded"
+}
+
 write_pi_loaded_markers() {
   local home=$1 root=$2 pid=$3
   write_pi_watch_loaded_marker "$home" "$root" "$pid"
   write_pi_turnend_loaded_marker "$home" "$root" "$pid"
+  write_pi_alias_loaded_marker "$home" "$root" "$pid"
 }
 
 # --- context digest: absent vs empty vs present -----------------------------
@@ -1240,7 +1253,7 @@ EOF
   assert_contains "$out" "SUPERVISION OPERATING INSTRUCTIONS - primary harness: pi" "pi supervision block missing"
   assert_contains "$out" "Mode: Pi extension background wake." "pi snippet missing from session start"
   assert_contains "$out" "PI_WATCH_EXTENSION: not loaded" "pi extension load diagnostic missing"
-  assert_contains "$out" "restart plain pi so $root/.pi/extensions/fm-primary-turnend-guard.ts and $root/.pi/extensions/fm-primary-pi-watch.ts auto-load" "pi extension load diagnostic omits the turn-end guard extension"
+  assert_contains "$out" "restart plain pi so $root/.pi/extensions/fm-primary-turnend-guard.ts, $root/.pi/extensions/fm-primary-pi-watch.ts, and $root/.pi/extensions/fm-primary-skill-aliases.ts auto-load" "pi extension load diagnostic omits the required Pi extensions"
 
   wake_line=$(printf '%s\n' "$out" | grep -n '^WAKE QUEUE$' | head -1 | cut -d: -f1)
   sup_line=$(printf '%s\n' "$out" | grep -n '^SUPERVISION OPERATING INSTRUCTIONS' | head -1 | cut -d: -f1)
@@ -1264,9 +1277,11 @@ EOF
   make_fake_ps_pi_holder "$fakebin" "$holder_pid"
   install_pi_turnend_extension_fixture "$root"
   install_pi_watch_extension_fixture "$root"
+  install_pi_alias_extension_fixture "$root"
   marker="$home/state/.pi-watch-extension-loaded"
   printf 'stale-extension-version\n%s\n' "$holder_pid" > "$marker"
   write_pi_turnend_loaded_marker "$home" "$root" "$holder_pid"
+  write_pi_alias_loaded_marker "$home" "$root" "$holder_pid"
   touch -t 203001010000 "$marker" 2>/dev/null || touch "$marker"
 
   out=$(FM_FAKE_HARNESS=pi run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
@@ -1291,6 +1306,7 @@ EOF
   make_fake_ps_pi_holder "$fakebin" "$holder_pid"
   install_pi_turnend_extension_fixture "$root"
   install_pi_watch_extension_fixture "$root"
+  install_pi_alias_extension_fixture "$root"
 
   write_pi_loaded_markers "$home" "$root" "$holder_pid"
 
@@ -1316,8 +1332,10 @@ EOF
   make_fake_ps_pi_holder "$fakebin" "$holder_pid"
   install_pi_turnend_extension_fixture "$root"
   install_pi_watch_extension_fixture "$root"
+  install_pi_alias_extension_fixture "$root"
 
   write_pi_watch_loaded_marker "$home" "$root" "$holder_pid"
+  write_pi_alias_loaded_marker "$home" "$root" "$holder_pid"
 
   out=$(FM_FAKE_HARNESS=pi run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
   kill "$holder_pid" 2>/dev/null || true
@@ -1341,10 +1359,12 @@ EOF
   make_fake_ps_pi_holder "$fakebin" "$holder_pid"
   install_pi_turnend_extension_fixture "$root"
   install_pi_watch_extension_fixture "$root"
+  install_pi_alias_extension_fixture "$root"
   marker="$home/state/.pi-watch-extension-loaded"
   version=$(hash_file_for_test "$root/.pi/extensions/fm-primary-pi-watch.ts")
   printf '%s\n999999\n' "$version" > "$marker"
   write_pi_turnend_loaded_marker "$home" "$root" "$holder_pid"
+  write_pi_alias_loaded_marker "$home" "$root" "$holder_pid"
 
   out=$(FM_FAKE_HARNESS=pi run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
   kill "$holder_pid" 2>/dev/null || true

@@ -124,7 +124,7 @@ run_ahoy_case() {
       pi --print --approve --no-session --no-context-files --no-extensions \
         --no-skills --skill .agents/skills --tools read \
         --model openai-codex/gpt-5.6-sol --thinking low \
-        "$preceding" "/ahoy"
+        "$preceding" "/skill:ahoy"
   ) || status=$?
   [ "$status" -eq 0 ] || fail "Pi Ahoy $label case exited $status: $out"
   case "$expected" in
@@ -221,7 +221,7 @@ run_native_ahoy_regressions() {
         -e .pi/extensions/fm-primary-turnend-guard.ts \
         --no-skills --skill .agents/skills \
         --model openai-codex/gpt-5.6-sol --thinking low \
-        "/ahoy"
+        "/skill:ahoy"
   )
   printf '%s\n' "$first_out" | grep -Fq "AHOY_BEARINGS_BRANCH" \
     || fail "Pi native first-message Ahoy did not take Bearings: $first_out"
@@ -234,7 +234,7 @@ run_native_ahoy_regressions() {
         -e .pi/extensions/fm-primary-turnend-guard.ts \
         --no-skills --skill .agents/skills \
         --model openai-codex/gpt-5.6-sol --thinking low \
-        "Respond exactly PRIOR_BOUNDARY_ACK." "/ahoy"
+        "Respond exactly PRIOR_BOUNDARY_ACK." "/skill:ahoy"
   )
   printf '%s\n' "$later_out" | grep -Fq "PRIOR_BOUNDARY_ACK" \
     || fail "Pi native later-message setup did not preserve the genuine captain boundary: $later_out"
