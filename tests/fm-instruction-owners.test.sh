@@ -13,14 +13,16 @@ HARNESS="$ROOT/.agents/skills/harness-adapters/SKILL.md"
 CODING="$ROOT/.agents/skills/firstmate-coding-guidelines/SKILL.md"
 RECOVERY="$ROOT/.agents/skills/stuck-crewmate-recovery/SKILL.md"
 SECONDMATE="$ROOT/.agents/skills/secondmate-provisioning/SKILL.md"
+RELEASE_BATCHING="$ROOT/.agents/skills/release-batching-protocol/SKILL.md"
 CONFIG="$ROOT/docs/configuration.md"
+ARCH="$ROOT/docs/architecture.md"
 AGENTS="$ROOT/AGENTS.md"
 BRIEF="$ROOT/bin/fm-brief.sh"
 BOOTSTRAP="$ROOT/bin/fm-bootstrap.sh"
 
 test_new_skill_metadata_and_triggers() {
   local skill name count
-  for pair in "diagnostic-reasoning:$DIAG" "project-management:$PROJECT"; do
+  for pair in "diagnostic-reasoning:$DIAG" "project-management:$PROJECT" "release-batching-protocol:$RELEASE_BATCHING"; do
     name=${pair%%:*}
     skill=${pair#*:}
     assert_present "$skill" "$name skill is missing"
@@ -38,6 +40,10 @@ test_new_skill_metadata_and_triggers() {
     "project-management skill metadata lost its precise load trigger"
   assert_grep '`project-management` - load before adding, creating, removing, or initializing a project.' "$ROOT/AGENTS.md" \
     "AGENTS.md lost the project-management trigger"
+  assert_grep 'Use before deciding that multiple ship lanes may certify or release together' "$RELEASE_BATCHING" \
+    "release-batching skill metadata lost its precise load trigger"
+  assert_grep '`release-batching-protocol` - load before deciding that multiple ship lanes may certify or release together' "$ROOT/AGENTS.md" \
+    "AGENTS.md lost the release-batching trigger"
   pass "new internal skills have one precise AGENTS.md trigger each"
 }
 
@@ -257,6 +263,63 @@ test_intake_reuses_evidence_and_parallelizes_safe_work() {
   pass "intake reuses evidence, reserves scouts for uncertainty, and parallelizes safe work"
 }
 
+test_release_batching_policy_allows_low_risk_parallel_lanes() {
+  local phrase
+  assert_grep "single owner of Firstmate's risk-class parallel certification and release-batching policy" "$RELEASE_BATCHING" \
+    "release-batching skill does not declare single ownership"
+  assert_grep "applies across every supported primary harness and runtime backend" "$RELEASE_BATCHING" \
+    "release-batching policy must be shared Firstmate behavior"
+  for phrase in \
+    'Independent low-risk certification may run in parallel for UI, documentation, tooling, lint rules, labels, and templates.' \
+    'no semantic dependency on another active lane' \
+    'no shared mutable external state' \
+    'no incompatible migration or rollout sequence' \
+    'Same-file overlap alone is not a blocker.' \
+    'Dispatch all eligible independent low-risk lanes' \
+    'Do not hold an eligible low-risk lane only because another low-risk lane touches the same file.' \
+    'Firstmate may treat multiple independent low-risk lanes as concurrently releaseable only after each lane is independently ready'; do
+    assert_grep "$phrase" "$RELEASE_BATCHING" "release-batching low-risk contract lost '$phrase'"
+  done
+  pass "release-batching owner permits independent low-risk certification and release lanes"
+}
+
+test_release_batching_policy_serializes_high_risk_and_preserves_authority() {
+  local phrase
+  for phrase in \
+    'Migrations remain isolated and serialized.' \
+    'Authentication, billing, runtime state machines, and deployment infrastructure remain isolated and serialized.' \
+    'Security-sensitive changes are never batched for speed.' \
+    'Unrelated migrations are never batched for speed.' \
+    'Production migration remains singular.' \
+    'Container cutover remains singular.' \
+    'Production release remains singular unless the captain gives explicit release authority for that concrete production action.' \
+    'Dark-feature activation is not authorized by parallel certification or release batching.' \
+    'Destructive or irreversible action is not authorized by parallel certification or release batching.' \
+    'It never replaces per-task `bin/fm-pr-check.sh`, `bin/fm-pr-merge.sh`, `bin/fm-merge-local.sh`, `bin/fm-teardown.sh`, or the guarded fleet-sync path.' \
+    'Never merge a red PR, never infer approval from batching, and never use batching to bypass an ask-user, captain approval, security, destructive, irreversible, or production boundary.'; do
+    assert_grep "$phrase" "$RELEASE_BATCHING" "release-batching serialized-class contract lost '$phrase'"
+  done
+  pass "release-batching owner serializes high-risk classes and preserves authority"
+}
+
+test_release_batching_load_points_cover_lifecycle_and_status() {
+  for phrase in \
+    'When deciding whether multiple ship lanes may certify or release together, load `release-batching-protocol`' \
+    'Parallel certification stays per lane; use `release-batching-protocol` before treating multiple lanes as concurrently ready.' \
+    'Release batching never replaces the per-task PR check, merge, local landing, cleanup, or fleet-sync helpers.' \
+    'When queued-work re-evaluation depends on risk class, load `release-batching-protocol` before dispatching or grouping multiple ship lanes.' \
+    '`release-batching-protocol` - load before deciding that multiple ship lanes may certify or release together'; do
+    assert_grep "$phrase" "$AGENTS" "AGENTS.md lost release-batching lifecycle load point '$phrase'"
+  done
+  assert_grep 'Batch non-urgent ready updates only when the grouping reflects independent low-risk lanes' "$RELEASE_BATCHING" \
+    "release-batching captain-facing status semantics are missing"
+  assert_grep 'Never phrase certification batching as feature activation, production release, migration execution, deployment cutover' "$RELEASE_BATCHING" \
+    "release-batching status semantics lost dark/production wording boundary"
+  assert_grep "The [\`release-batching-protocol\` skill](../.agents/skills/release-batching-protocol/SKILL.md) owns risk classes" "$ARCH" \
+    "architecture docs do not point to the release-batching owner"
+  pass "release-batching load points cover dispatch, validation, release, queue re-evaluation, and status"
+}
+
 test_compressed_agents_retains_authority_and_supervision_safety() {
   for phrase in \
     'A lock-refused session must not spawn, steer, merge, drain the wake queue' \
@@ -296,4 +359,7 @@ test_secondmate_registry_contract_stays_concise
 test_state_startup_and_ordinary_recovery_placement
 test_compressed_agents_owner_map
 test_intake_reuses_evidence_and_parallelizes_safe_work
+test_release_batching_policy_allows_low_risk_parallel_lanes
+test_release_batching_policy_serializes_high_risk_and_preserves_authority
+test_release_batching_load_points_cover_lifecycle_and_status
 test_compressed_agents_retains_authority_and_supervision_safety
