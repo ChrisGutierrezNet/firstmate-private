@@ -40,9 +40,9 @@ test_new_skill_metadata_and_triggers() {
     "project-management skill metadata lost its precise load trigger"
   assert_grep '`project-management` - load before adding, creating, removing, or initializing a project.' "$ROOT/AGENTS.md" \
     "AGENTS.md lost the project-management trigger"
-  assert_grep 'Use before deciding that multiple ship lanes may certify or release together' "$RELEASE_BATCHING" \
+  assert_grep 'Use before initial intake, dispatch, or spawn decisions that may let multiple ship lanes proceed' "$RELEASE_BATCHING" \
     "release-batching skill metadata lost its precise load trigger"
-  assert_grep '`release-batching-protocol` - load before deciding that multiple ship lanes may certify or release together' "$ROOT/AGENTS.md" \
+  assert_grep '`release-batching-protocol` - load before initial intake, dispatch, or spawn decisions that may let multiple ship lanes proceed' "$ROOT/AGENTS.md" \
     "AGENTS.md lost the release-batching trigger"
   pass "new internal skills have one precise AGENTS.md trigger each"
 }
@@ -304,11 +304,11 @@ test_release_batching_policy_serializes_high_risk_and_preserves_authority() {
 
 test_release_batching_load_points_cover_lifecycle_and_status() {
   for phrase in \
-    'When deciding whether multiple ship lanes may certify or release together, load `release-batching-protocol`' \
+    'Before initial intake, dispatch, or spawn decisions that may let multiple ship lanes proceed, load `release-batching-protocol`' \
     'Parallel certification stays per lane; use `release-batching-protocol` before treating multiple lanes as concurrently ready.' \
     'Release batching never replaces the per-task PR check, merge, local landing, cleanup, or fleet-sync helpers.' \
     'When queued-work re-evaluation depends on risk class, load `release-batching-protocol` before dispatching or grouping multiple ship lanes.' \
-    '`release-batching-protocol` - load before deciding that multiple ship lanes may certify or release together'; do
+    '`release-batching-protocol` - load before initial intake, dispatch, or spawn decisions that may let multiple ship lanes proceed'; do
     assert_grep "$phrase" "$AGENTS" "AGENTS.md lost release-batching lifecycle load point '$phrase'"
   done
   assert_grep 'Batch non-urgent ready updates only when the grouping reflects independent low-risk lanes' "$RELEASE_BATCHING" \

@@ -2,7 +2,7 @@
 name: release-batching-protocol
 description: >-
   Agent-only policy for Firstmate risk-class parallel certification and release batching.
-  Use before deciding that multiple ship lanes may certify or release together, when risk class affects queued-work re-evaluation, and before batching captain-facing release status.
+  Use before initial intake, dispatch, or spawn decisions that may let multiple ship lanes proceed; when risk class affects queued-work re-evaluation; before deciding that multiple ship lanes may certify or release together; and before batching captain-facing release status.
 user-invocable: false
 metadata:
   internal: true

@@ -250,7 +250,7 @@ Load `diagnostic-reasoning` before scoping a reported bug and before acting on a
 
 Treat file or subsystem overlap as a risk signal rather than an automatic reason to wait, and dispatch isolated work immediately with no concurrency cap when each change can be independently implemented and validated and the selected delivery path can reconcile ordinary rebases or conflicts.
 Serialize only for a true semantic dependency, shared mutable external state, incompatible concurrent migration, or another concrete condition that makes independent progress or reconciliation unsafe; same-file editing alone is insufficient, and genuine blockers remain durable.
-When deciding whether multiple ship lanes may certify or release together, load `release-batching-protocol`; it owns risk classes, batching boundaries, and non-expanded authority.
+Before initial intake, dispatch, or spawn decisions that may let multiple ship lanes proceed, load `release-batching-protocol`; it owns risk classes, batching boundaries, and non-expanded authority.
 Write the task-specific brief under section 11 before spawning.
 
 ### Dispatch and supervision handoff
@@ -485,7 +485,7 @@ These skills are not captain-invocable; load them only at their precise triggers
 - `fmx-respond` - load on an `x-mention <request_id>` `check:` wake to handle the mention, on an `x-mode-error ...` `check:` wake to report the X-mode configuration blocker, and on any milestone or terminal wake for an X-mode-linked task before posting its completion follow-up; relevant only when X mode is on.
 - `firstmate-codexapp` - load before coordinating a visible Codex Desktop thread, evaluating a Codex App backend request, or reconciling Codex Desktop host-tool smoke evidence for Firstmate work.
 - `firstmate-coding-guidelines` - load before changing firstmate's shared, tracked material, as defined by section 1's list, whether editing directly or briefing a crewmate for a firstmate-repo task.
-- `release-batching-protocol` - load before deciding that multiple ship lanes may certify or release together, when risk class affects queued-work re-evaluation, or before batching captain-facing release status.
+- `release-batching-protocol` - load before initial intake, dispatch, or spawn decisions that may let multiple ship lanes proceed; when risk class affects queued-work re-evaluation; before deciding that multiple ship lanes may certify or release together; and before batching captain-facing release status.
 
 ## 14. X mode
 
