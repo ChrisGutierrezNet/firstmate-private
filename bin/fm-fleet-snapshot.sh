@@ -227,7 +227,7 @@ snapshot_make_file() {
   while [ "$try" -lt 100 ]; do
     SNAPSHOT_TMP_COUNTER=$((SNAPSHOT_TMP_COUNTER + 1))
     file="$tmpbase/fm-fleet-snapshot.$$.$SNAPSHOT_TMP_COUNTER"
-    if ( set -C; : > "$file" ) 2>/dev/null; then
+    if ( umask 077; set -C; : > "$file" ) 2>/dev/null; then
       if [ -n "$SNAPSHOT_TMP_FILES" ]; then
         SNAPSHOT_TMP_FILES="$SNAPSHOT_TMP_FILES
 $file"
