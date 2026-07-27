@@ -165,6 +165,52 @@ run() {  # <home> <fakebin> <args...>
   PATH="$fakebin:$PATH" FM_HOME="$home" FM_BEARINGS_NOW=2026-07-11T18:00:00Z NET_LOG="$home/net.log" "$BEARINGS" "$@"
 }
 
+test_large_inventory_uses_file_backed_snapshot_transport() {
+  local home fakebin canonical bearings payload count i id
+  home=$(make_home large-argv-transport)
+  fakebin=$(make_fakebin "$home")
+  count=48
+  payload=$(awk 'BEGIN { for (i = 0; i < 4096; i++) printf "x" }')
+  {
+    printf '## In flight\n'
+    i=1
+    while [ "$i" -le "$count" ]; do
+      id=$(printf 'ship-%03d' "$i")
+      mkdir -p "$home/projects/$id"
+      printf -- '- [ ] %s - Large task %03d (repo: firstmate) (kind: ship) (since 2026-07-27)\n' "$id" "$i"
+      fm_write_meta "$home/state/$id.meta" \
+        "window=firstmate:fm-$id" \
+        "worktree=$home/projects/$id" \
+        "project=firstmate" \
+        "harness=codex" \
+        "kind=ship" \
+        "mode=ship"
+      printf 'working: %s %s\n' "$id" "$payload" > "$home/state/$id.status"
+      i=$((i + 1))
+    done
+    printf '\n## Queued\n\n## Done\n'
+  } > "$home/data/backlog.md"
+
+  canonical=$(PATH="$fakebin:$PATH" FM_HOME="$home" "$ROOT/bin/fm-fleet-snapshot.sh" --json)
+  [ "${#canonical}" -gt 131072 ] || fail "large fixture did not exceed a single argv-safe JSON string"
+  printf '%s' "$canonical" | jq -e --argjson count "$count" '
+    .schema == "fm-fleet-snapshot.v1"
+      and (.tasks | length) == $count
+      and .main_inventory.valid == true
+      and ([.tasks[].id] | .[0] == "ship-001" and .[-1] == "ship-048")
+      and (.tasks[] | select(.id == "ship-048") | (.hints.last_event_text | length) > 4096)
+  ' >/dev/null || fail "large canonical snapshot did not preserve deterministic structured output"
+
+  bearings=$(run "$home" "$fakebin" --json --all-in-flight)
+  printf '%s' "$bearings" | jq -e --argjson count "$count" '
+    .schema == "fm-bearings.v1"
+      and (.in_flight | length) == $count
+      and ([.in_flight[].id] | .[0] == "ship-001" and .[-1] == "ship-048")
+      and ([.omitted[].surface] | any(test("in_flight showing")) | not)
+  ' >/dev/null || fail "large Bearings projection did not report every in-flight task: $bearings"
+  pass "large fleet snapshot transport uses file-backed JSON instead of argv-sized jq args"
+}
+
 # End-to-end Domain Alpha regression fixture.
 # The parent event claims Phase 7 started, while the registered home has no child
 # metadata, every sample-rollout item is Done, and only an external legal hold remains.
@@ -1892,6 +1938,7 @@ test_chat_contract_four_sections() {
 
 test_domain_alpha_stale_parent_event_does_not_become_current_work
 test_gnu_stat_uses_file_formats_without_bsd_fallback_pollution
+test_large_inventory_uses_file_backed_snapshot_transport
 test_parent_activity_evidence_is_bounded_and_disclosed
 test_active_child_overrides_old_parent_event
 test_structured_child_decision_reaches_captains_call
