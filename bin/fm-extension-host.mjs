@@ -457,8 +457,7 @@ function writeGeneratedFile(file, content, validated) {
     if (st.isSymbolicLink() || !st.isFile()) {
       fail(`refusing to overwrite unsafe generated path: ${file}`);
     }
-    const current = fs.readFileSync(file, "utf8");
-    if (!current.includes(GENERATED_MARKER)) {
+    if (!isOwnedGeneratedFile(file, validated.id)) {
       fail(`refusing to overwrite unowned generated path: ${file}`);
     }
   }

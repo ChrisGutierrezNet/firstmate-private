@@ -219,7 +219,7 @@ test_manifest_security_rejections() {
 }
 
 test_activation_and_deactivation_markers() {
-  local tmp generated wrapper unowned out owned_empty owned_nested unmarked_empty mismatch_dir escape_target escape_link
+  local tmp generated wrapper unowned out owned_empty owned_nested unmarked_empty mismatch_dir escape_target escape_link before
   tmp=$(fm_test_tmproot fm-extension-unowned-marker)
   setup_case "$tmp"
   generated="$CASE_HOME/state/extensions/$CASE_ID/generated"
@@ -227,6 +227,31 @@ test_activation_and_deactivation_markers() {
   printf '{"api_version":"other","id":"someone-else"}\n' > "$generated/.owner.json"
   expect_fm_ext_fail "activation refuses unowned generated owner markers" \
     "refusing to overwrite unowned generated owner marker" activate "$CASE_ID"
+
+  tmp=$(fm_test_tmproot fm-extension-unowned-wrapper)
+  setup_case "$tmp"
+  generated="$CASE_HOME/state/extensions/$CASE_ID/generated"
+  wrapper="$generated/wrappers/lint"
+  mkdir -p "$generated/wrappers"
+  printf '{"api_version":"firstmate.extension.generated/v1","id":"%s"}\n' "$CASE_ID" > "$generated/.owner.json"
+  printf '{"api_version":"firstmate.extension.generated/v1","id":"%s"}\n' "$CASE_ID" > "$generated/wrappers/.owner.json"
+  printf 'user-created wrapper\n' > "$wrapper"
+  expect_fm_ext_fail "activation refuses unmarked generated wrapper files" \
+    "refusing to overwrite unowned generated path" activate "$CASE_ID"
+  assert_grep "user-created wrapper" "$wrapper" "activation overwrote unmarked wrapper material"
+
+  tmp=$(fm_test_tmproot fm-extension-mismatched-wrapper)
+  setup_case "$tmp"
+  generated="$CASE_HOME/state/extensions/$CASE_ID/generated"
+  wrapper="$generated/wrappers/lint"
+  mkdir -p "$generated/wrappers"
+  printf '{"api_version":"firstmate.extension.generated/v1","id":"%s"}\n' "$CASE_ID" > "$generated/.owner.json"
+  printf '{"api_version":"firstmate.extension.generated/v1","id":"%s"}\n' "$CASE_ID" > "$generated/wrappers/.owner.json"
+  printf '#!/usr/bin/env bash\n# firstmate-extension-generated firstmate.extension.generated/v1 id=other-extension entrypoint=lint\nprintf mismatched\\n\n' > "$wrapper"
+  chmod 700 "$wrapper"
+  expect_fm_ext_fail "activation refuses mismatched generated wrapper files" \
+    "refusing to overwrite unowned generated path" activate "$CASE_ID"
+  assert_grep "id=other-extension" "$wrapper" "activation overwrote mismatched wrapper material"
 
   tmp=$(fm_test_tmproot fm-extension-activate)
   setup_case "$tmp"
@@ -239,6 +264,12 @@ test_activation_and_deactivation_markers() {
   [ -x "$wrapper" ] || fail "generated wrapper is not executable"
   assert_grep "firstmate-extension-generated firstmate.extension.generated/v1 id=$CASE_ID" "$wrapper" \
     "generated wrapper lacks owner marker"
+  before=$(sha256_file "$wrapper")
+  printf '#!/usr/bin/env bash\n# firstmate-extension-generated firstmate.extension.generated/v1 id=%s entrypoint=lint\nprintf stale\\n\n' "$CASE_ID" > "$wrapper"
+  chmod 700 "$wrapper"
+  out=$(fm_ext activate "$CASE_ID") || fail "activation should overwrite matching owned wrapper: $out"
+  [ "$(sha256_file "$wrapper")" = "$before" ] || fail "activation did not refresh matching owned wrapper"
+  assert_grep "exec " "$wrapper" "activation failed to restore matching owned wrapper content"
   out=$(fm_ext render-no-mistakes "$CASE_ID") || fail "render-no-mistakes should succeed"
   assert_contains "$out" "commands:" "render-no-mistakes did not print commands root"
   assert_contains "$out" "lint:" "render-no-mistakes did not print lint command"
