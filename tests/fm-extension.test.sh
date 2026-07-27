@@ -295,6 +295,40 @@ test_deactivation_is_idempotent_without_unowned_material() {
   pass "deactivation is idempotent after owned generated cleanup"
 }
 
+test_deactivation_rejects_generated_path_symlinks() {
+  local tmp generated outside out rc
+  tmp=$(fm_test_tmproot fm-extension-ancestor-symlink)
+  setup_case "$tmp"
+  fm_ext activate "$CASE_ID" >/dev/null || fail "activate should succeed"
+  generated="$CASE_HOME/state/extensions/$CASE_ID/generated"
+  outside="$tmp/outside-extension-state"
+  mkdir -p "$outside"
+  mv "$generated" "$outside/generated"
+  rm -rf "$CASE_HOME/state/extensions/$CASE_ID"
+  ln -s "$outside" "$CASE_HOME/state/extensions/$CASE_ID"
+  out=$(fm_ext deactivate "$CASE_ID" 2>&1)
+  rc=$?
+  [ "$rc" -ne 0 ] || fail "deactivate should reject ancestor symlink"
+  assert_contains "$out" "generated directory path must not contain a symlink" \
+    "ancestor symlink rejection was not explicit"
+  assert_present "$outside/generated/.owner.json" "deactivate followed ancestor symlink and removed escaped material"
+
+  tmp=$(fm_test_tmproot fm-extension-final-symlink)
+  setup_case "$tmp"
+  fm_ext activate "$CASE_ID" >/dev/null || fail "activate should succeed"
+  generated="$CASE_HOME/state/extensions/$CASE_ID/generated"
+  outside="$tmp/outside-generated"
+  mv "$generated" "$outside"
+  ln -s "$outside" "$generated"
+  out=$(fm_ext deactivate "$CASE_ID" 2>&1)
+  rc=$?
+  [ "$rc" -ne 0 ] || fail "deactivate should reject final generated symlink"
+  assert_contains "$out" "generated directory path must not contain a symlink" \
+    "final symlink rejection was not explicit"
+  assert_present "$outside/.owner.json" "deactivate followed final symlink and removed escaped material"
+  pass "deactivation rejects generated path symlink escapes"
+}
+
 test_wrapper_failure_behavior() {
   local tmp wrapper rc
   tmp=$(fm_test_tmproot fm-extension-wrapper-fail)
@@ -363,6 +397,7 @@ test_valid_manifest_doctor
 test_manifest_security_rejections
 test_activation_and_deactivation_markers
 test_deactivation_is_idempotent_without_unowned_material
+test_deactivation_rejects_generated_path_symlinks
 test_wrapper_failure_behavior
 test_isolated_nm_home_repo_command_wrapper
 test_read_only_no_mistakes_observability

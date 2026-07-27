@@ -103,6 +103,25 @@ function lstatSafe(file, label) {
   }
 }
 
+function assertNoSymlinkPathAncestry(target, label) {
+  const resolved = path.resolve(target);
+  const root = path.parse(resolved).root;
+  const parts = path.relative(root, resolved).split(path.sep).filter(Boolean);
+  let current = root;
+  for (const part of parts) {
+    current = path.join(current, part);
+    let st;
+    try {
+      st = fs.lstatSync(current);
+    } catch (error) {
+      if (error && error.code === "ENOENT") return false;
+      throw error;
+    }
+    if (st.isSymbolicLink()) fail(`${label} path must not contain a symlink: ${current}`);
+  }
+  return true;
+}
+
 function assertSafeRegularFile(file, label, options = {}) {
   const st = lstatSafe(file, label);
   if (st.isSymbolicLink()) fail(`${label} must not be a symlink: ${file}`);
@@ -418,6 +437,7 @@ function generatedWrapperPath(validated, entrypointName) {
 }
 
 function ensureCreatedDirectory(dir, mode = 0o700) {
+  assertNoSymlinkPathAncestry(dir, "generated directory");
   const existed = fs.existsSync(dir);
   fs.mkdirSync(dir, { recursive: true, mode });
   const st = lstatSafe(dir, "generated directory");
@@ -564,7 +584,7 @@ function commandDeactivate(opts, id) {
   if (!opts.home) fail("FM_HOME is required; pass --home or set FM_HOME", 2);
   validateId(id, "extension id");
   const generatedDir = path.join(opts.home, "state", "extensions", id, "generated");
-  if (!fs.existsSync(generatedDir)) {
+  if (!assertNoSymlinkPathAncestry(generatedDir, "generated directory")) {
     process.stdout.write(`fm-extension: no generated material for ${id}\n`);
     return;
   }
