@@ -48,8 +48,8 @@ This prevents the host from deleting material it did not create.
 
 The host treats No Mistakes as an installed external binary.
 It checks compatibility with `no-mistakes --version`.
-It never replaces `/home/exedev/.local/bin/no-mistakes`.
-It never mutates `/home/exedev/kun-agent-workspace/projects/no-mistakes`.
+It never replaces the installed `no-mistakes` binary.
+It never mutates any No Mistakes project clone.
 It never starts, stops, restarts, or updates the shared No Mistakes daemon.
 Tests use disposable scratch repositories and isolated `NM_HOME` values.
 
@@ -60,6 +60,7 @@ Pipeline ownership remains with the worker that starts a No Mistakes run, as req
 
 External No Mistakes PR #588 is outside this implementation path.
 That PR is not required for implementation, certification, deployment, or release of the Firstmate-owned extension host.
+Uncontrolled repositories, including `kunchenguid/no-mistakes` and any upstream fork, remain outside implementation, certification, deployment, and release for this milestone.
 Any future workflow affected by branchsync custody behavior must be gated by installed No Mistakes version checks rather than by upstream PR status.
 
 ## Integration Review
