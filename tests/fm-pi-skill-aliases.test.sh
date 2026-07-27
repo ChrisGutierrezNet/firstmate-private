@@ -57,6 +57,7 @@ let extraCommands = [];
 let availableSkills = new Set(aliases);
 const registeredCommands = [];
 const handlers = new Map();
+const inputHandlers = [];
 const sent = [];
 const notices = [];
 const skillRoot = `${process.env.TEST_TMP}/handler-skills`;
@@ -76,7 +77,9 @@ const sourceInfo = (path, source = "test") => ({
 });
 
 const pi = {
-  on() {},
+  on(event, handler) {
+    if (event === "input") inputHandlers.push(handler);
+  },
   registerCommand(name, options) {
     handlers.set(name, options.handler);
     registeredCommands.push({
@@ -183,6 +186,26 @@ extraCommands = [{
 }];
 await handlers.get("stow")("again", idleCtx);
 if (sent.length !== beforeCollisionSends) throw new Error("suffixed collision did not refuse dispatch");
+
+const inputResult = await inputHandlers.at(-1)(
+  { type: "input", text: "/stow EXACT  args\n/afk --literal", source: "rpc" },
+  idleCtx,
+);
+if (inputResult?.action !== "handled") {
+  throw new Error(`suffixed collision input was not handled: ${JSON.stringify(inputResult)}`);
+}
+if (sent.length !== beforeCollisionSends) throw new Error("suffixed collision input fell through to dispatch");
+if (!notices.at(-1)?.message.includes("Use /skill:stow")) {
+  throw new Error(`suffixed collision input notice did not point at the native skill: ${JSON.stringify(notices.at(-1))}`);
+}
+
+const nonAliasInputResult = await inputHandlers.at(-1)(
+  { type: "input", text: "/not-firstmate hello", source: "rpc" },
+  idleCtx,
+);
+if (nonAliasInputResult?.action !== "continue") {
+  throw new Error(`non-alias input should continue: ${JSON.stringify(nonAliasInputResult)}`);
+}
 
 extraCommands = [];
 availableSkills = new Set(aliases.filter((name) => name !== "updatefirstmate"));

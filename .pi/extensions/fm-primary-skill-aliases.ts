@@ -14,6 +14,8 @@ import { stripFrontmatter } from "@earendil-works/pi-coding-agent";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
+  ExtensionContext,
+  InputEvent,
   SlashCommandInfo,
 } from "@earendil-works/pi-coding-agent";
 
@@ -117,6 +119,13 @@ function formatCommand(command: SlashCommandInfo): string {
   return `${command.source}:${command.name} (${command.sourceInfo.path})`;
 }
 
+function parseAliasInvocation(text: string): Alias | undefined {
+  if (!text.startsWith("/")) return undefined;
+  const spaceIndex = text.indexOf(" ");
+  const commandName = spaceIndex === -1 ? text.slice(1) : text.slice(1, spaceIndex);
+  return aliases.find((alias) => alias.alias === commandName);
+}
+
 export default function (pi: ExtensionAPI) {
   const isThisExtensionCommand = (command: SlashCommandInfo, alias: string): boolean => (
     command.source === "extension" &&
@@ -149,18 +158,21 @@ export default function (pi: ExtensionAPI) {
     return args.length > 0 ? `${skillBlock}\n\n${args}` : skillBlock;
   };
 
+  const refuseCollisions = (alias: Alias, ctx: ExtensionContext): boolean => {
+    const collisions = commandCollisions(alias.alias);
+    if (collisions.length === 0) return false;
+    ctx.ui.notify(
+      `Firstmate /${alias.alias} refused because another Pi command already owns that name: ${collisions.map(formatCommand).join("; ")}. Use /skill:${alias.skill} for the Firstmate skill.`,
+      "error",
+    );
+    return true;
+  };
+
   for (const alias of aliases) {
     pi.registerCommand(alias.alias, {
       description: alias.description,
       handler: async (args, ctx) => {
-        const collisions = commandCollisions(alias.alias);
-        if (collisions.length > 0) {
-          ctx.ui.notify(
-            `Firstmate /${alias.alias} refused because another Pi command already owns that name: ${collisions.map(formatCommand).join("; ")}. Use /skill:${alias.skill} for the Firstmate skill.`,
-            "error",
-          );
-          return;
-        }
+        if (refuseCollisions(alias, ctx)) return;
 
         const skill = loadedSkill(ctx, alias.skill);
         if (!hasNativeSkillCommand(alias.skill) || !skill) {
@@ -191,6 +203,14 @@ export default function (pi: ExtensionAPI) {
       },
     });
   }
+
+  pi.on("input", (event: InputEvent, ctx: ExtensionContext) => {
+    const alias = parseAliasInvocation(event.text);
+    if (alias && refuseCollisions(alias, ctx)) {
+      return { action: "handled" };
+    }
+    return { action: "continue" };
+  });
 
   pi.on("session_start", () => {
     markLoaded();
