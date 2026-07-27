@@ -188,10 +188,14 @@ snapshot_rm() {
 }
 
 snapshot_cleanup_tmp() {
-  local file
+  local file tmpbase
   if [ -n "$SNAPSHOT_TMP_DIR" ]; then
     snapshot_rm -rf "$SNAPSHOT_TMP_DIR"
   fi
+  tmpbase=${TMPDIR:-/tmp}
+  for file in "$tmpbase"/fm-fleet-snapshot."$$".*; do
+    [ -e "$file" ] && snapshot_rm -f "$file"
+  done
   if [ -n "$SNAPSHOT_TMP_FILES" ]; then
     while IFS= read -r file; do
       [ -n "$file" ] && snapshot_rm -f "$file"

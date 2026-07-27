@@ -211,6 +211,49 @@ test_large_inventory_uses_file_backed_snapshot_transport() {
   pass "large fleet snapshot transport uses file-backed JSON instead of argv-sized jq args"
 }
 
+test_no_mktemp_fallback_cleans_file_backed_snapshot_transport() {
+  local home fakebin tmpdir bashenv canonical leftovers
+  home=$(make_home no-mktemp-transport-cleanup)
+  fakebin=$(make_fakebin "$home")
+  tmpdir="$home/tmp"
+  mkdir -p "$tmpdir" "$home/projects/task-one"
+  cat > "$home/data/backlog.md" <<'EOF'
+## In flight
+- [ ] task-one - Exercise fallback transport cleanup (repo: firstmate) (kind: ship)
+
+## Queued
+
+## Done
+EOF
+  fm_write_meta "$home/state/task-one.meta" \
+    "window=firstmate:fm-task-one" \
+    "worktree=$home/projects/task-one" \
+    "project=firstmate" \
+    "harness=codex" \
+    "kind=ship" \
+    "mode=ship"
+  printf 'working: fallback cleanup\n' > "$home/state/task-one.status"
+  bashenv="$home/hide-mktemp.bashenv"
+  cat > "$bashenv" <<'SH'
+command() {
+  if [ "${1:-}" = -v ] && [ "${2:-}" = mktemp ]; then
+    return 1
+  fi
+  builtin command "$@"
+}
+SH
+
+  canonical=$(PATH="$fakebin:$PATH" BASH_ENV="$bashenv" TMPDIR="$tmpdir" FM_HOME="$home" "$ROOT/bin/fm-fleet-snapshot.sh" --json)
+  printf '%s' "$canonical" | jq -e '
+    .schema == "fm-fleet-snapshot.v1"
+      and (.tasks | length) == 1
+      and .tasks[0].id == "task-one"
+  ' >/dev/null || fail "no-mktemp fallback did not produce a valid canonical snapshot"
+  leftovers=$(find "$tmpdir" -maxdepth 1 -type f -name 'fm-fleet-snapshot.*' | wc -l | tr -d ' ')
+  [ "$leftovers" = 0 ] || fail "no-mktemp fallback left transport files behind: $leftovers"
+  pass "no-mktemp fallback cleans file-backed snapshot transport"
+}
+
 # End-to-end Domain Alpha regression fixture.
 # The parent event claims Phase 7 started, while the registered home has no child
 # metadata, every sample-rollout item is Done, and only an external legal hold remains.
@@ -1939,6 +1982,7 @@ test_chat_contract_four_sections() {
 test_domain_alpha_stale_parent_event_does_not_become_current_work
 test_gnu_stat_uses_file_formats_without_bsd_fallback_pollution
 test_large_inventory_uses_file_backed_snapshot_transport
+test_no_mktemp_fallback_cleans_file_backed_snapshot_transport
 test_parent_activity_evidence_is_bounded_and_disclosed
 test_active_child_overrides_old_parent_event
 test_structured_child_decision_reaches_captains_call
