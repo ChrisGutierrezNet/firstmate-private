@@ -2,9 +2,9 @@
 name: project-management
 description: >-
   Agent-only procedure for Firstmate project management.
-  Use before adding, creating, removing, or initializing a project.
+  Use before adding, creating, removing, or initializing a project, and before retiring an out-of-registry project tree.
   Cloning or registering a project is add intake and uses the same trigger.
-  Owns project add, create, clone, remove, initialization, registry, delivery-mode, autonomy, and outward-consent decisions.
+  Owns project add, create, clone, remove, retire, initialization, registry, delivery-mode, autonomy, and outward-consent decisions.
 user-invocable: false
 metadata:
   internal: true
@@ -12,7 +12,7 @@ metadata:
 
 # project-management
 
-Use this procedure before adding, creating, removing, or initializing a project.
+Use this procedure before adding, creating, removing, or initializing a project, and before retiring an out-of-registry project tree.
 Cloning or registering a project is add intake and uses the same trigger.
 This skill is the single owner of Firstmate's project-management procedure.
 It does not replace `secondmate-provisioning`, which owns project clones inside persistent secondmate homes.
@@ -75,11 +75,24 @@ Initialization configures the local gate and does not vendor a no-mistakes skill
 Do not create a commit merely because initialization ran.
 If doctor reports an environment, authentication, or daemon problem, resolve that blocker before dispatching work and never restart the shared daemon from a project operation.
 
-## Remove
+## Remove or retire
 
-Project removal is destructive.
+Project removal is destructive, and so is retiring an out-of-registry legacy tree left behind by an earlier layout.
+Both follow the same path.
+
 First obtain the captain's explicit removal decision, then inspect the current digest and authoritative repositories for in-flight or queued work, registered secondmate clones, linked worktrees, dirty files, unpushed commits, and any other unlanded work.
 If any dependency or unlanded work exists, stop and report it before changing anything.
 Never issue a raw removal command from Firstmate.
-Once that preflight confirms none of the above and the captain's approval is concrete, AGENTS.md hard rule 1's captain-approved project operation exception authorizes firstmate to remove the clone directly and update its registry entry to match.
+
+`bin/fm-project-retire.sh` is the single guarded owner of the removal itself.
+Its header and `--help` own the exact flags, the complete refusal list, the landing-proof ladder, and every mechanic; do not restate them here or anywhere else.
+The order that matters is:
+
+1. Get the captain's concrete approval for that specific tree.
+2. Retire the tree's registry line first, because the helper refuses while `data/projects.md` or `data/secondmates.md` still names the path; a registry line without a clone is navigable, a clone the registry still points at is not.
+3. Run the helper's preflight, read the printed plan end to end, and confirm it names exactly the tree and linked pool the captain approved.
+4. Execute only with the plan id that preflight printed, so evidence that changed in between refuses instead of removing a tree nobody approved.
+
+A refusal from that helper is a stop-and-report result, never an obstacle to route around: do not force, prune, stash, reset, or discard anything to make a check pass, and do not fall back to a raw removal command.
+Once the captain's approval is concrete and the helper's own checks pass, AGENTS.md hard rule 1's guarded project-retirement exception authorizes running it.
 When a clone has already been removed through an approved removal, or the registry is provably stale because no clone exists, remove its registry line so navigation matches reality.
