@@ -1246,8 +1246,8 @@ secondmate_current_json() {  # <parent-tasks-json>
           # and landed from structured backlog rows. Dropping to the parent-event
           # fallback here would discard a whole home's readable current work,
           # including captain-actionable holds, over one bookkeeping mismatch.
-          # Only transport failures above - timeout, non-zero exit, byte limit,
-          # malformed or stale output - leave the home genuinely unread.
+          # Only the transport failures handled above leave the home genuinely
+          # unread; the file header owns that full list.
           summary_valid=$(printf '%s' "$summary" | jq -r '.valid')
         fi
       fi
