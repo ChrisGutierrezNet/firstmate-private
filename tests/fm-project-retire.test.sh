@@ -105,6 +105,27 @@ run_retire --root "$T/approved/legacy" --boundary "$T/approved" --preflight --ex
 expect_code 2 "$RC" "--preflight and --execute together is a usage error"
 pass "usage contract requires an explicit absolute root, boundary, and confirmations"
 
+# --- no-mistakes gate refusal -----------------------------------------------
+#
+# docs/architecture.md lists this owner alongside fm-spawn/fm-send/fm-teardown as
+# a bin/fm-gate-refuse-lib.sh caller. tests/lib.sh exports FM_GATE_REFUSE_BYPASS
+# for the whole suite, so strip it here and run from a neutral cwd to isolate the
+# env-marker signal: an otherwise perfectly valid retirement must still exit 3
+# before it inspects or removes anything.
+
+new_fixture
+set +e
+OUT=$(cd "$T" && env -u FM_GATE_REFUSE_BYPASS NO_MISTAKES_GATE=1 \
+  FM_ROOT_OVERRIDE="$T/home" FM_HOME="$T/home" FM_RETIRE_PROC_ROOT="$T/proc" \
+  "$RETIRE" --root "$T/approved/legacy" --pool "$T/approved/pool" \
+  --boundary "$T/approved" --preflight 2>&1)
+RC=$?
+set -e
+expect_code 3 "$RC" "a no-mistakes gate agent is refused"
+assert_contains "$OUT" "must not drive the fleet" "the gate refusal names its signal"
+assert_present "$T/approved/legacy/clone" "the gate refusal inspects and removes nothing"
+pass "a no-mistakes gate agent cannot drive a fleet removal"
+
 # --- path safety ------------------------------------------------------------
 
 run_retire --root "$T/approved/missing" --boundary "$T/approved" --preflight

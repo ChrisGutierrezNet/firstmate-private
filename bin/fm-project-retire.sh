@@ -73,13 +73,15 @@
 #   - any dirty or untracked file in any checkout;
 #   - a linked worktree outside the root and the proven pool, any locked
 #     worktree, or any stale worktree registration whose path is gone;
-#   - a repository with no remote, a remote fetch failure, or no remote-tracking
-#     ref after the fetch (incomplete landing evidence);
-#   - a remote whose URL resolves to a path inside a removal target, so the
-#     landing evidence would not survive the removal that cites it;
+#   - a repository with no remote, or a remote whose URL resolves to a path
+#     inside a removal target, so the landing evidence would not survive the
+#     removal that cites it;
+#   - a remote fetch failure, or no remote-tracking ref after the fetch
+#     (incomplete landing evidence);
+#   - a local branch whose work is not proven landed;
 #   - an object-store check (`git fsck`) that fails or cannot complete, so the
 #     repository's unreachable commits cannot be enumerated;
-#   - a local branch, or an unreachable commit, whose work is not proven landed;
+#   - an unreachable commit whose work is not proven landed;
 #   - any ambiguous git result anywhere above.
 #
 # Landing proof (a matching commit subject is NEVER proof). In order:
@@ -118,10 +120,11 @@
 # how many were inspected and how many were not, so the gap is visible rather
 # than assumed away.
 #
-# The mutation is exactly two `rm -rf --` calls on the two canonical paths named
-# in the plan, pool first so the authoritative repository survives longest. No
-# glob, no recursion into symlinks (`rm -rf` unlinks a symlink, never follows
-# it), and no cleanup beyond those two paths. Any removal error stops the run
+# The mutation is exactly one `rm -rf --` call per removal target named in the
+# plan - the root, preceded by the pool when `--pool` was given - so the
+# authoritative repository survives longest. No glob, no recursion into
+# symlinks (`rm -rf` unlinks a symlink, never follows it), and no cleanup
+# beyond the paths the plan names. Any removal error stops the run
 # immediately and reports precisely what was and was not removed.
 #
 # Exit codes: 0 success, 1 refusal or removal failure, 2 usage error,
