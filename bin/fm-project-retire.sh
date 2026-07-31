@@ -75,6 +75,10 @@
 #     worktree, or any stale worktree registration whose path is gone;
 #   - a repository with no remote, a remote fetch failure, or no remote-tracking
 #     ref after the fetch (incomplete landing evidence);
+#   - a remote whose URL resolves to a path inside a removal target, so the
+#     landing evidence would not survive the removal that cites it;
+#   - an object-store check (`git fsck`) that fails or cannot complete, so the
+#     repository's unreachable commits cannot be enumerated;
 #   - a local branch, or an unreachable commit, whose work is not proven landed;
 #   - any ambiguous git result anywhere above.
 #
@@ -91,9 +95,11 @@
 # a silent skip; raise the bound deliberately when the evidence needs it.
 #
 # Repository discovery finds both working checkouts (a `.git` file or directory)
-# and standalone repositories with no worktree (a bare repository or a detached
-# git directory), so objects that no checkout points at are still proven landed
-# before anything is removed.
+# and standalone repositories with no worktree, so objects that no checkout
+# points at are still proven landed before anything is removed. A standalone
+# repository is recognised by being its own git common directory, whether it is
+# bare or a detached non-bare git directory (a `--separate-git-dir` target, or a
+# `.git` directory whose worktree is gone); `core.bare` is never the test.
 #
 # Evidence freshness: preflight and execute each run one non-pruning
 # `git fetch <remote>` per repository so landing evidence is current, and a fetch
@@ -106,9 +112,11 @@
 # re-run --preflight and approve the new plan deliberately.
 #
 # Live-process coverage: the current-directory check reads FM_RETIRE_PROC_ROOT
-# (default /proc). Entries this user cannot read - other users' processes - are
-# not inspectable; the plan reports how many were inspected and how many were
-# not, so the gap is visible rather than assumed away.
+# (default /proc) exactly once, testing each process against every removal
+# target in that single pass so each process is counted once. Entries this user
+# cannot read - other users' processes - are not inspectable; the plan reports
+# how many were inspected and how many were not, so the gap is visible rather
+# than assumed away.
 #
 # The mutation is exactly two `rm -rf --` calls on the two canonical paths named
 # in the plan, pool first so the authoritative repository survives longest. No
@@ -255,8 +263,13 @@ add_protected() {
   PROTECTED_LABELS+=("$2")
 }
 
+# Match the (home: ...) field itself rather than requiring it to be the first
+# parenthesised group: summary and scope prose routinely carries its own
+# parentheticals, and a "^[^(]*" prefix would leave those entries looking like
+# they have no home - silently dropping that secondmate's state directory from
+# the recorded-task scan. Greedy prefix, so the last (home: ...) wins.
 registry_home_for_line() {
-  sed -n 's/^[^(]*(home: \([^;)]*\);.*/\1/p'
+  sed -n 's/.*(home:[[:space:]]*\([^;)]*\);.*/\1/p' | sed 's/[[:space:]]*$//'
 }
 
 registry_id_for_line() {
@@ -348,9 +361,14 @@ assert_no_task_reference() {
 
 PROC_INSPECTED=0
 PROC_UNREADABLE=0
+# One pass over the process table for every removal target at once: walking it
+# per target would count each process once per target and report an inspected /
+# not-inspectable coverage gap that is a multiple of the real one.
 assert_no_live_process_cwd() {
-  local path=$1 label=$2 entry pid cwd
-  [ -d "$PROC_ROOT" ] || refuse "cannot prove no live process is working inside $path: $PROC_ROOT is unavailable"
+  local entry pid cwd i
+  [ "${#REMOVAL_TARGETS[@]}" -gt 0 ] || return 0
+  [ -d "$PROC_ROOT" ] \
+    || refuse "cannot prove no live process is working inside ${REMOVAL_TARGETS[*]}: $PROC_ROOT is unavailable"
   for entry in "$PROC_ROOT"/[0-9]*; do
     [ -d "$entry" ] || continue
     pid=$(basename "$entry")
@@ -361,9 +379,11 @@ assert_no_live_process_cwd() {
     PROC_INSPECTED=$(( PROC_INSPECTED + 1 ))
     cwd=${cwd% (deleted)}
     case "$cwd" in /*) ;; *) continue ;; esac
-    if path_equal_or_inside "${cwd%/}" "$path"; then
-      refuse "$label $path is the current directory of live process $pid ($cwd)"
-    fi
+    for i in "${!REMOVAL_TARGETS[@]}"; do
+      if path_equal_or_inside "${cwd%/}" "${REMOVAL_TARGETS[$i]}"; then
+        refuse "${REMOVAL_LABELS[$i]} ${REMOVAL_TARGETS[$i]} is the current directory of live process $pid ($cwd)"
+      fi
+    done
   done
 }
 
@@ -385,27 +405,42 @@ $found
 EOF
 }
 
-BARE_REPOS=()
+STANDALONE_REPOS=()
 
-# Standalone repositories have no `.git` marker for collect_checkouts to find:
-# a bare repository, or a detached git directory, is recognised by being its own
-# git common directory. Nested git directories (a worktree administrative dir, a
-# `.git/logs` directory) resolve to an enclosing common directory instead and are
-# left to the checkout that owns them.
-collect_bare_repos() {
-  local dir=$1 found head candidate canon bare common
+# A directory holding HEAD, objects/ and refs/ is git's own shape for a
+# repository directory. A worktree administrative directory or a stray HEAD file
+# elsewhere in the tree does not have all three, so this is what separates a
+# candidate repository from an ordinary directory that happens to contain a file
+# named HEAD.
+looks_like_git_dir() {
+  local dir=$1
+  [ -f "$dir/HEAD" ] && [ -d "$dir/objects" ] && [ -d "$dir/refs" ]
+}
+
+# Standalone repositories have no `.git` marker for collect_checkouts to find: a
+# repository directory is recognised by being its own git common directory,
+# whether it is bare or a detached non-bare git directory whose worktree is gone
+# or lives elsewhere. `core.bare` is deliberately not the test - a
+# `--separate-git-dir` target reports false and still holds objects nothing else
+# proves landed. Nested git directories (a worktree administrative dir) resolve
+# to an enclosing common directory instead and are left to the checkout that
+# owns them; a repository-shaped directory git cannot resolve is a refusal, not
+# a skip.
+collect_standalone_repos() {
+  local dir=$1 found head candidate canon common
   found=$(find -P "$dir" -type f -name HEAD -print 2>/dev/null) \
     || refuse "cannot inventory git repositories under $dir"
   [ -n "$found" ] || return 0
   while IFS= read -r head; do
     [ -n "$head" ] || continue
     candidate=$(dirname "$head")
-    canon=$(canonical_dir "$candidate") || continue
-    bare=$(git -C "$canon" rev-parse --is-bare-repository 2>/dev/null) || continue
-    [ "$bare" = true ] || continue
-    common=$(common_dir_of "$canon") || continue
+    looks_like_git_dir "$candidate" || continue
+    canon=$(canonical_dir "$candidate") \
+      || refuse "git repository directory $candidate cannot be resolved to a canonical directory; refusing on an ambiguous git result"
+    common=$(common_dir_of "$canon") \
+      || refuse "git repository directory $canon does not report a resolvable git directory; refusing on an ambiguous git result"
     [ "$common" = "$canon" ] || continue
-    BARE_REPOS+=("$canon")
+    STANDALONE_REPOS+=("$canon")
   done <<EOF
 $found
 EOF
@@ -417,6 +452,62 @@ common_dir_of() {
   [ -n "$common" ] || return 1
   case "$common" in /*) ;; *) common="$workdir/$common" ;; esac
   ( cd "$common" 2>/dev/null && pwd -P ) || return 1
+}
+
+# Echo the local filesystem path a remote URL names, or fail when the URL names
+# a network transport. Only local URLs can sit inside a removal target.
+remote_local_path() {
+  local workdir=$1 url=$2 path canon dir base
+  case "$url" in
+    file://localhost/*) path=${url#file://localhost} ;;
+    file:///*) path=${url#file://} ;;
+    *://*) return 1 ;;
+    /*) path=$url ;;
+    *)
+      # scp-like [user@]host:path carries its colon before any slash.
+      case "$url" in
+        */*) case "${url%%/*}" in *:*) return 1 ;; esac ;;
+        *:*) return 1 ;;
+      esac
+      path="$workdir/$url"
+      ;;
+  esac
+  [ -n "$path" ] || return 1
+  if canon=$(canonical_dir "$path"); then
+    printf '%s\n' "$canon"
+    return 0
+  fi
+  # A path that is not a directory right now still has to be placed: canonicalize
+  # the parent so a bare repository named but not yet resolvable still lands in
+  # the tree it belongs to.
+  dir=$(dirname "$path")
+  base=$(basename "$path")
+  if canon=$(canonical_dir "$dir"); then
+    printf '%s\n' "${canon%/}/$base"
+    return 0
+  fi
+  printf '%s\n' "${path%/}"
+}
+
+# Landing evidence has to outlive the removal that cites it. A remote pointing
+# at a mirror inside the retirement tree - or at the repository's own path -
+# fetches happily and makes every branch look like an exact ancestor of a ref
+# this same run destroys, so the proof proves nothing.
+assert_remote_evidence_survives() {
+  local common=$1 workdir=$2 remote=$3 urls url resolved i
+  urls=$(git -C "$workdir" remote get-url --all "$remote" 2>/dev/null) \
+    || refuse "cannot read the URL of remote $remote in repository $common; refusing on an ambiguous git result"
+  while IFS= read -r url; do
+    [ -n "$url" ] || continue
+    resolved=$(remote_local_path "$workdir" "$url") || continue
+    for i in "${!REMOVAL_TARGETS[@]}"; do
+      if path_equal_or_inside "$resolved" "${REMOVAL_TARGETS[$i]}"; then
+        refuse "repository $common takes its landing evidence from remote $remote ($url), which resolves to $resolved inside ${REMOVAL_LABELS[$i]} ${REMOVAL_TARGETS[$i]}; that evidence would be destroyed by this retirement, so it proves nothing"
+      fi
+    done
+  done <<EOF
+$urls
+EOF
 }
 
 patch_id_of() {
@@ -566,11 +657,24 @@ assert_inside_a_boundary() {
 assert_inside_a_boundary "$ROOT" "retirement root"
 [ -z "$POOL" ] || assert_inside_a_boundary "$POOL" "legacy pool root"
 
-assert_no_task_reference "$ROOT" "retirement root"
-[ -z "$POOL" ] || assert_no_task_reference "$POOL" "legacy pool root"
+# The removal targets are known as soon as the paths are validated, and every
+# later check - recorded tasks, live processes, and the remote URLs the landing
+# proof cites - is asked about all of them at once. Pool first, so the
+# authoritative repository is removed last.
+REMOVAL_TARGETS=()
+REMOVAL_LABELS=()
+if [ -n "$POOL" ]; then
+  REMOVAL_TARGETS+=("$POOL")
+  REMOVAL_LABELS+=("legacy pool root")
+fi
+REMOVAL_TARGETS+=("$ROOT")
+REMOVAL_LABELS+=("retirement root")
 
-assert_no_live_process_cwd "$ROOT" "retirement root"
-[ -z "$POOL" ] || assert_no_live_process_cwd "$POOL" "legacy pool root"
+for index in "${!REMOVAL_TARGETS[@]}"; do
+  assert_no_task_reference "${REMOVAL_TARGETS[$index]}" "${REMOVAL_LABELS[$index]}"
+done
+
+assert_no_live_process_cwd
 
 # --- inventory --------------------------------------------------------------
 
@@ -622,12 +726,12 @@ done <<EOF
 $SORTED_CHECKOUTS
 EOF
 
-collect_bare_repos "$ROOT"
-[ -z "$POOL" ] || collect_bare_repos "$POOL"
-for bare_repo in ${BARE_REPOS[@]+"${BARE_REPOS[@]}"}; do
-  path_equal_or_inside "$bare_repo" "$ROOT" \
-    || refuse "git repository $bare_repo has no worktree and lives outside the retirement root $ROOT"
-  remember_repo "$bare_repo" "$bare_repo"
+collect_standalone_repos "$ROOT"
+[ -z "$POOL" ] || collect_standalone_repos "$POOL"
+for standalone_repo in ${STANDALONE_REPOS[@]+"${STANDALONE_REPOS[@]}"}; do
+  path_equal_or_inside "$standalone_repo" "$ROOT" \
+    || refuse "git repository $standalone_repo has no worktree and lives outside the retirement root $ROOT"
+  remember_repo "$standalone_repo" "$standalone_repo"
 done
 
 for index in "${!REPO_COMMONS[@]}"; do
@@ -666,6 +770,7 @@ EOF
     || refuse "repository $common has no remote, so no landing evidence exists for its branches"
   while IFS= read -r remote; do
     [ -n "$remote" ] || continue
+    assert_remote_evidence_survives "$common" "$workdir" "$remote"
     git -C "$workdir" fetch --quiet --no-prune "$remote" 2>/dev/null \
       || refuse "cannot refresh landing evidence for repository $common: git fetch $remote failed"
   done <<EOF
@@ -705,8 +810,15 @@ EOF
 $branches
 EOF
 
-  unreachable=$(git -C "$workdir" fsck --unreachable --no-reflogs --no-progress --connectivity-only 2>/dev/null \
-    | sed -n 's/^unreachable commit //p' | LC_ALL=C sort -u || true)
+  # fsck's own exit status, not the pipeline's: piping it into sed would report
+  # a corrupt or unreadable object store as "no unreachable commits" and let the
+  # tree be deleted without its dangling objects ever being proven landed.
+  fsck_rc=0
+  fsck_output=$(git -C "$workdir" fsck --unreachable --no-reflogs --no-progress --connectivity-only 2>&1) \
+    || fsck_rc=$?
+  [ "$fsck_rc" -eq 0 ] \
+    || refuse "cannot check the object store of repository $common: git fsck exited $fsck_rc, so its unreachable commits cannot be enumerated:"$'\n'"$(printf '%s\n' "$fsck_output" | head -10)"
+  unreachable=$(printf '%s\n' "$fsck_output" | sed -n 's/^unreachable commit //p' | LC_ALL=C sort -u)
   unreachable_count=0
   while IFS= read -r sha; do
     [ -n "$sha" ] || continue
@@ -720,19 +832,6 @@ $unreachable
 EOF
   add_report "  $unreachable_count unreachable commits, all landed"
 done
-
-if [ -n "$POOL" ]; then
-  while IFS= read -r checkout; do
-    [ -n "$checkout" ] || continue
-    path_equal_or_inside "$checkout" "$POOL" || continue
-    common=$(common_dir_of "$checkout") \
-      || refuse "pool checkout $checkout does not report a resolvable git directory"
-    path_equal_or_inside "$common" "$ROOT" \
-      || refuse "pool checkout $checkout belongs to repository $common outside the retirement root $ROOT"
-  done <<EOF
-$SORTED_CHECKOUTS
-EOF
-fi
 
 # Top-level entries are part of the plan so the operator sees every non-checkout
 # file and directory the bounded removal would take with it.
@@ -773,10 +872,6 @@ PLAN_ID=$(
   } | digest_of_stdin
 ) || refuse "cannot compute a plan id: neither sha256sum nor shasum is available"
 [ -n "$PLAN_ID" ] || refuse "cannot compute a plan id from the inspected evidence"
-
-REMOVAL_TARGETS=()
-[ -z "$POOL" ] || REMOVAL_TARGETS+=("$POOL")
-REMOVAL_TARGETS+=("$ROOT")
 
 print_plan() {
   printf 'PLAN: guarded retirement of %s\n' "$ROOT"

@@ -186,12 +186,41 @@ assert_contains "$OUT" "recorded task task-a" "task refusal names the task"
 pass "a live task reference refuses"
 
 new_fixture
+mkdir -p "$T/sm-home/state"
+printf -- '- sm - a second mate (id is legacy) covering x (home: %s; scope: y; added 2026-07-30)\n' \
+  "$T/sm-home" > "$T/home/data/secondmates.md"
+fm_write_meta "$T/sm-home/state/task-b.meta" \
+  "window=firstmate:fm-task-b" \
+  "worktree=$T/approved/pool/1/clone"
+preflight
+expect_code 1 "$RC" "a task recorded by a secondmate whose registry line has prose parentheses refuses"
+assert_contains "$OUT" "recorded task task-b" "the parenthetical registry line still yields its state directory"
+pass "a secondmate home is found even behind prose parentheses in its registry line"
+
+new_fixture
 mkdir -p "$T/proc/4242"
 ln -s "$T/approved/legacy/clone" "$T/proc/4242/cwd"
 preflight
 expect_code 1 "$RC" "a live process working inside the tree refuses"
 assert_contains "$OUT" "live process 4242" "process refusal names the pid"
+
+new_fixture
+mkdir -p "$T/proc/4243"
+ln -s "$T/approved/pool/1/clone" "$T/proc/4243/cwd"
+preflight
+expect_code 1 "$RC" "a live process working inside the proven pool refuses"
+assert_contains "$OUT" "legacy pool root" "the pool process refusal names the pool as the target"
 pass "a live process current directory refuses"
+
+new_fixture
+mkdir -p "$T/proc/11" "$T/proc/12" "$T/proc/13"
+ln -s "$T/seed" "$T/proc/11/cwd"
+ln -s "$T/home" "$T/proc/12/cwd"
+preflight
+expect_code 0 "$RC" "processes outside the retirement tree do not refuse"
+assert_contains "$OUT" "inspected 2 live process working directories (1 not inspectable" \
+  "the process table is walked once, so --pool does not double the reported coverage"
+pass "live-process coverage counts each process exactly once across every removal target"
 
 # --- git inventory ----------------------------------------------------------
 
@@ -242,7 +271,15 @@ preflight
 expect_code 1 "$RC" "a bare repository with no landing evidence refuses"
 assert_contains "$OUT" "orphan.git" "the bare repository is inventoried, not skipped"
 assert_contains "$OUT" "no remote" "the bare repository needs its own landing evidence"
-pass "a standalone repository with no checkout is still inventoried"
+
+new_fixture
+git init -q -b main --separate-git-dir "$T/approved/legacy/detached.git" "$T/approved/legacy/detached-work"
+rm -rf "$T/approved/legacy/detached-work"
+preflight
+expect_code 1 "$RC" "a detached non-bare git directory is inspected, not skipped"
+assert_contains "$OUT" "detached.git" "the detached git directory is inventoried"
+assert_contains "$OUT" "no remote" "the detached git directory needs its own landing evidence"
+pass "a standalone repository with no checkout is still inventoried, bare or not"
 
 new_fixture
 mkdir -p "$T/approved/pool/2"
@@ -278,6 +315,38 @@ preflight
 expect_code 1 "$RC" "a failed evidence refresh refuses"
 assert_contains "$OUT" "cannot refresh landing evidence" "stale-evidence refusal is explicit"
 pass "incomplete or unrefreshable landing evidence refuses"
+
+new_fixture
+git clone -q --bare "file://$T/upstream.git" "$T/approved/legacy/mirror.git"
+git -C "$T/approved/legacy/clone" remote set-url origin "file://$T/approved/legacy/mirror.git"
+preflight
+expect_code 1 "$RC" "landing evidence inside the retirement root refuses"
+assert_contains "$OUT" "would be destroyed by this retirement" "the doomed-evidence refusal explains itself"
+assert_contains "$OUT" "mirror.git" "the doomed-evidence refusal names the remote it distrusts"
+assert_present "$T/approved/legacy/clone" "nothing is removed when the evidence is doomed"
+
+new_fixture
+git -C "$T/approved/legacy/clone" remote set-url origin "$T/approved/legacy/clone"
+preflight
+expect_code 1 "$RC" "a self-remote is not landing evidence"
+assert_contains "$OUT" "would be destroyed by this retirement" "the self-remote refusal explains itself"
+
+new_fixture
+git -C "$T/approved/legacy/clone" remote set-url origin "file://$T/approved/pool/mirror.git"
+preflight
+expect_code 1 "$RC" "landing evidence inside the proven pool refuses"
+assert_contains "$OUT" "legacy pool root" "the pool-evidence refusal names the pool"
+pass "landing evidence that lives inside a removal target refuses"
+
+new_fixture
+mkdir -p "$T/approved/legacy/clone/.git/objects/ab"
+printf 'not an object at all' \
+  > "$T/approved/legacy/clone/.git/objects/ab/1234567890123456789012345678901234abcd"
+preflight
+expect_code 1 "$RC" "an unreadable object store refuses"
+assert_contains "$OUT" "cannot check the object store" "the fsck refusal is explicit"
+assert_present "$T/approved/legacy/clone" "a corrupt object store removes nothing"
+pass "a git fsck failure refuses instead of reporting no unreachable commits"
 
 new_fixture
 git -C "$T/approved/legacy/clone" checkout -q -b unlanded main
