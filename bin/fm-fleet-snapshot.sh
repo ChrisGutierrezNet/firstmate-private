@@ -85,12 +85,16 @@ case "$SNAPSHOT_EPOCH" in ''|*[!0-9]*) SNAPSHOT_EPOCH=$(date +%s) ;; esac
 # Cross-home bounds are explicit so one broken or unexpectedly large home cannot
 # hang or explode the parent snapshot.
 FM_SNAPSHOT_SECONDMATES=${FM_SNAPSHOT_SECONDMATES:-20}
-# Per-home bound, plus a budget that caps the WHOLE cross-home pass. A real home
-# costs one live child-state read per task, so an 8s per-home bound sat inside the
-# measured spread of an ordinary multi-task home and made a healthy home read as
-# unavailable about half the time. The per-home bound is sized above that spread
-# instead, and the aggregate stays bounded by the budget rather than by
-# per-home-bound x home-count, so the total is smaller than it used to be.
+# Per-home bound, plus a budget that caps the structured-home summary reads across
+# ALL homes. A real home costs one live child-state read per task, so an 8s per-home
+# bound sat inside the measured spread of an ordinary multi-task home and made a
+# healthy home read as unavailable about half the time. The per-home bound is sized
+# above that spread instead, and those summary reads stay bounded by the budget
+# rather than by per-home-bound x home-count, so the total is smaller than it used
+# to be. The per-home parent-activity and terminal-evidence bounds are NOT charged
+# against the budget, so the aggregate ceiling is the budget plus those supplemental
+# per-home bounds across homes. A home whose bound the budget clips short reports
+# the budget rather than the per-home timeout, so the two causes stay distinct.
 FM_SNAPSHOT_SECONDMATE_TIMEOUT=${FM_SNAPSHOT_SECONDMATE_TIMEOUT:-20}
 FM_SNAPSHOT_SECONDMATE_BUDGET=${FM_SNAPSHOT_SECONDMATE_BUDGET:-60}
 FM_SNAPSHOT_SECONDMATE_MAX_BYTES=${FM_SNAPSHOT_SECONDMATE_MAX_BYTES:-262144}
@@ -167,8 +171,11 @@ queued with hold_reason, hold_kind, and plural blocker fields for downstream
 projections. A captain hold is actionable only when every blocker is Done.
 Cross-home reads use FM_SNAPSHOT_SECONDMATES (default 20, 0 lifts the count
 bound), FM_SNAPSHOT_SECONDMATE_TIMEOUT (per home), FM_SNAPSHOT_SECONDMATE_BUDGET
-(the whole cross-home pass; a home reached after it is spent reports the budget as
-its reason), and FM_SNAPSHOT_SECONDMATE_MAX_BYTES.
+(the structured-home summary reads across all homes; a home whose read the budget
+cuts short, and a home it never reaches, both report the budget rather than the
+per-home timeout as their reason), and FM_SNAPSHOT_SECONDMATE_MAX_BYTES. The
+per-home parent-activity and terminal-evidence bounds sit outside that budget, so
+the aggregate ceiling is the budget plus those supplemental bounds across homes.
 Terminal contradiction evidence uses
 FM_SNAPSHOT_TERMINAL_LINES, FM_SNAPSHOT_TERMINAL_BYTES, and
 FM_SNAPSHOT_TERMINAL_TIMEOUT and never becomes canonical current state.
@@ -1110,7 +1117,7 @@ secondmate_current_json() {  # <parent-tasks-json>
   local tasks=$1 registry union rows total_registered total shown truncated
   local row id home registered registry_error task status_file event_raw event_note event_epoch event_age
   local activity_scan activities decisions reconciliation provenance freshness reason summary summary_rc summary_bytes summary_valid state current_reason terminal terminal_contradiction contradiction
-  local records='[]' seen_homes='' budget_start budget_left home_timeout
+  local records='[]' seen_homes='' budget_start budget_left home_timeout home_budget_clipped
   # Real elapsed time, never SNAPSHOT_EPOCH: that is the declared observation time
   # and is pinned by fixtures.
   budget_start=$(date +%s)
@@ -1181,7 +1188,11 @@ secondmate_current_json() {  # <parent-tasks-json>
     if [ -z "$reason" ]; then
       budget_left=$((FM_SNAPSHOT_SECONDMATE_BUDGET - ($(date +%s) - budget_start)))
       home_timeout=$FM_SNAPSHOT_SECONDMATE_TIMEOUT
-      [ "$budget_left" -lt "$home_timeout" ] && home_timeout=$budget_left
+      home_budget_clipped=false
+      if [ "$budget_left" -lt "$home_timeout" ]; then
+        home_timeout=$budget_left
+        home_budget_clipped=true
+      fi
     fi
     if [ -z "$reason" ] && [ "$home_timeout" -le 0 ]; then
       reason="cross-home read budget exhausted before this home was read"
@@ -1203,7 +1214,13 @@ secondmate_current_json() {  # <parent-tasks-json>
         "$SCRIPT_DIR/fm-fleet-snapshot.sh" --secondmate-home-summary 2>/dev/null)
       summary_rc=$?
       if [ "$summary_rc" -ne 0 ]; then
-        [ "$summary_rc" -eq 124 ] && reason="structured home snapshot timed out" || reason="structured home snapshot failed"
+        if [ "$summary_rc" -ne 124 ]; then
+          reason="structured home snapshot failed"
+        elif [ "$home_budget_clipped" = true ]; then
+          reason="cross-home read budget expired while reading this home"
+        else
+          reason="structured home snapshot timed out"
+        fi
       else
         summary_bytes=$(printf '%s' "$summary" | LC_ALL=C wc -c | tr -d ' ')
         if [ "$summary_bytes" -gt "$FM_SNAPSHOT_SECONDMATE_MAX_BYTES" ]; then

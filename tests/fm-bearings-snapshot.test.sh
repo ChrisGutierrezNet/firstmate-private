@@ -644,13 +644,50 @@ test_cross_home_budget_is_bounded_and_explicit() {
     run "$home" "$fakebin" --json)
   elapsed=$(( $(date +%s) - started ))
   [ "$elapsed" -lt 30 ] || fail "cross-home reads were not bounded by the budget (${elapsed}s)"
+  # A 3s budget covers exactly one full 2s per-home bound, so only the first home
+  # can spend an unclipped bound and report the per-home timeout. Every later home
+  # is clipped or never reached, and must name the budget instead.
   printf '%s' "$json" | jq -e '
     (.secondmates | length) == 3
       and all(.secondmates[]; .state == "unknown" and .provenance == "parent-event-fallback")
-      and (.secondmates | any(.[]; .reason | contains("budget exhausted")))
+      and ([.secondmates[] | select(.reason == "structured home snapshot timed out")] | length) == 1
+      and ([.secondmates[] | select(.reason | contains("budget"))] | length) == 2
+      and (.secondmates | any(.[]; .reason | contains("budget exhausted before this home was read")))
       and (.in_flight | length) == 0
-  ' >/dev/null || fail "budget exhaustion was not bounded or not disclosed: $json"
-  pass "the cross-home pass is bounded overall and names budget exhaustion explicitly"
+  ' >/dev/null || fail "budget pressure was not bounded or was attributed to the home: $json"
+  pass "the cross-home pass is bounded overall and names budget pressure explicitly"
+}
+
+# A home the budget clips short never answered either, but the reason must name the
+# budget rather than blaming the home for a per-home timeout it never got to spend.
+test_budget_clipped_home_names_the_budget_not_a_timeout() {
+  local home mate fakebin json wt
+  home=$(make_home budget-clipped)
+  : > "$home/data/secondmates.md"
+  mate="$TMP_ROOT/budget-clipped-mate"
+  make_valid_secondmate_home clipped "$mate"
+  append_secondmate_registry "$home" clipped "$mate"
+  write_parent_secondmate_event "$home" clipped "$mate" "old clipped work"
+  wt="$mate/projects/slow"
+  fm_git_init_commit "$wt"
+  git -C "$wt" checkout -q -b fm/slow-clipped
+  printf '## In flight\n- [ ] slow - Slow child (repo: sample) (kind: ship) (since 2026-07-13)\n\n## Queued\n\n## Done\n' \
+    > "$mate/data/backlog.md"
+  fm_write_meta "$mate/state/slow.meta" \
+    "window=firstmate:fm-slow" "worktree=$wt" "project=sample" \
+    "harness=codex" "kind=ship" "mode=no-mistakes"
+  fakebin=$(make_fakebin "$home")
+  # The budget is smaller than the per-home bound, so the very first home is clipped.
+  json=$(FAKE_NM_SLEEP=1 FM_SNAPSHOT_SECONDMATE_TIMEOUT=30 FM_SNAPSHOT_SECONDMATE_BUDGET=2 \
+    run "$home" "$fakebin" --json)
+  printf '%s' "$json" | jq -e '
+    (.secondmates | length) == 1
+      and all(.secondmates[]; .state == "unknown" and .provenance == "parent-event-fallback")
+      and (.secondmates[0].reason | contains("budget"))
+      and (.secondmates[0].reason != "structured home snapshot timed out")
+      and (.in_flight | length) == 0
+  ' >/dev/null || fail "a budget-clipped home was reported as a per-home timeout: $json"
+  pass "a budget-clipped home names the cross-home budget instead of a per-home timeout"
 }
 
 test_oversized_secondmate_summary_stays_strict_unknown() {
@@ -2065,6 +2102,7 @@ test_large_secondmate_inventory_is_still_read
 test_large_main_inventory_still_produces_a_snapshot
 test_contradictory_home_keeps_readable_surfaces
 test_cross_home_budget_is_bounded_and_explicit
+test_budget_clipped_home_names_the_budget_not_a_timeout
 test_secondmate_and_child_bounds_are_disclosed
 test_parent_decision_is_untrusted_contradiction_only
 test_parent_evidence_reconciles_by_verb_and_key
