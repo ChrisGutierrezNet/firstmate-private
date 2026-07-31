@@ -1117,10 +1117,7 @@ secondmate_current_json() {  # <parent-tasks-json>
   local tasks=$1 registry union rows total_registered total shown truncated
   local row id home registered registry_error task status_file event_raw event_note event_epoch event_age
   local activity_scan activities decisions reconciliation provenance freshness reason summary summary_rc summary_bytes summary_valid state current_reason terminal terminal_contradiction contradiction
-  local records='[]' seen_homes='' budget_start budget_left home_timeout home_budget_clipped
-  # Real elapsed time, never SNAPSHOT_EPOCH: that is the declared observation time
-  # and is pinned by fixtures.
-  budget_start=$(date +%s)
+  local records='[]' seen_homes='' summary_spent=0 summary_start budget_left home_timeout home_budget_clipped
   registry=$(registry_secondmates_json) || return 1
   union=$(json_docs "$registry" "$tasks" | jq -n '
     ([inputs] | if length == 2 then . else error("secondmate union: expected 2 documents") end) as [$registry, $tasks]
@@ -1186,7 +1183,7 @@ secondmate_current_json() {  # <parent-tasks-json>
       fi
     fi
     if [ -z "$reason" ]; then
-      budget_left=$((FM_SNAPSHOT_SECONDMATE_BUDGET - ($(date +%s) - budget_start)))
+      budget_left=$((FM_SNAPSHOT_SECONDMATE_BUDGET - summary_spent))
       home_timeout=$FM_SNAPSHOT_SECONDMATE_TIMEOUT
       home_budget_clipped=false
       if [ "$budget_left" -lt "$home_timeout" ]; then
@@ -1198,6 +1195,9 @@ secondmate_current_json() {  # <parent-tasks-json>
       reason="cross-home read budget exhausted before this home was read"
     fi
     if [ -z "$reason" ]; then
+      # Real elapsed time, never SNAPSHOT_EPOCH: that is the declared observation
+      # time and is pinned by fixtures.
+      summary_start=$(date +%s)
       summary=$(run_timed "$home_timeout" env \
         FM_ROOT_OVERRIDE="$FM_ROOT" \
         FM_HOME="$home" \
@@ -1213,6 +1213,7 @@ secondmate_current_json() {  # <parent-tasks-json>
         FM_SNAPSHOT_SECONDMATE_LANDED_PER_HOME="$FM_SNAPSHOT_SECONDMATE_LANDED_PER_HOME" \
         "$SCRIPT_DIR/fm-fleet-snapshot.sh" --secondmate-home-summary 2>/dev/null)
       summary_rc=$?
+      summary_spent=$((summary_spent + $(date +%s) - summary_start))
       if [ "$summary_rc" -ne 0 ]; then
         if [ "$summary_rc" -ne 124 ]; then
           reason="structured home snapshot failed"
