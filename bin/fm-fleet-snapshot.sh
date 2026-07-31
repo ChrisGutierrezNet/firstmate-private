@@ -44,6 +44,13 @@
 #     each home with explicit provenance, freshness, endpoint evidence, and unknown
 #     failure reasons. Parent status and bounded terminal evidence are historical,
 #     untrusted supplements only and never override readable structured-home facts.
+#     Only a TRANSPORT failure - timeout, cross-home budget exhaustion, non-zero
+#     exit, byte-limit, malformed or stale output, or an unusable home path - leaves
+#     a home unread and drops it to the strict empty parent-event fallback. A home
+#     that answered with a schema-valid in-bounds summary keeps structured-home
+#     provenance even when its own inventory is self-contradictory: the
+#     classification becomes unknown with the contradiction as its reason, while the
+#     independently derived surfaces stay readable rather than being discarded.
 #     Each structured-home record carries active_children, decisions_open, holds,
 #     queued, landed, endpoints, counts, and omitted. Actionable captain holds
 #     appear in decisions_open; blocked captain holds remain queued with metadata.
@@ -78,7 +85,14 @@ case "$SNAPSHOT_EPOCH" in ''|*[!0-9]*) SNAPSHOT_EPOCH=$(date +%s) ;; esac
 # Cross-home bounds are explicit so one broken or unexpectedly large home cannot
 # hang or explode the parent snapshot.
 FM_SNAPSHOT_SECONDMATES=${FM_SNAPSHOT_SECONDMATES:-20}
-FM_SNAPSHOT_SECONDMATE_TIMEOUT=${FM_SNAPSHOT_SECONDMATE_TIMEOUT:-8}
+# Per-home bound, plus a budget that caps the WHOLE cross-home pass. A real home
+# costs one live child-state read per task, so an 8s per-home bound sat inside the
+# measured spread of an ordinary multi-task home and made a healthy home read as
+# unavailable about half the time. The per-home bound is sized above that spread
+# instead, and the aggregate stays bounded by the budget rather than by
+# per-home-bound x home-count, so the total is smaller than it used to be.
+FM_SNAPSHOT_SECONDMATE_TIMEOUT=${FM_SNAPSHOT_SECONDMATE_TIMEOUT:-20}
+FM_SNAPSHOT_SECONDMATE_BUDGET=${FM_SNAPSHOT_SECONDMATE_BUDGET:-60}
 FM_SNAPSHOT_SECONDMATE_MAX_BYTES=${FM_SNAPSHOT_SECONDMATE_MAX_BYTES:-262144}
 FM_SNAPSHOT_SECONDMATE_CHILDREN=${FM_SNAPSHOT_SECONDMATE_CHILDREN:-20}
 FM_SNAPSHOT_SECONDMATE_QUEUED=${FM_SNAPSHOT_SECONDMATE_QUEUED:-20}
@@ -109,6 +123,7 @@ case "$FM_SNAPSHOT_SECONDMATES" in
     ;;
 esac
 validate_positive_bound FM_SNAPSHOT_SECONDMATE_TIMEOUT "$FM_SNAPSHOT_SECONDMATE_TIMEOUT"
+validate_positive_bound FM_SNAPSHOT_SECONDMATE_BUDGET "$FM_SNAPSHOT_SECONDMATE_BUDGET"
 validate_positive_bound FM_SNAPSHOT_SECONDMATE_MAX_BYTES "$FM_SNAPSHOT_SECONDMATE_MAX_BYTES"
 validate_positive_bound FM_SNAPSHOT_SECONDMATE_CHILDREN "$FM_SNAPSHOT_SECONDMATE_CHILDREN"
 validate_positive_bound FM_SNAPSHOT_SECONDMATE_QUEUED "$FM_SNAPSHOT_SECONDMATE_QUEUED"
@@ -151,7 +166,9 @@ Actionable tasks-axi captain holds appear as decisions_open and stay visible in
 queued with hold_reason, hold_kind, and plural blocker fields for downstream
 projections. A captain hold is actionable only when every blocker is Done.
 Cross-home reads use FM_SNAPSHOT_SECONDMATES (default 20, 0 lifts the count
-bound), FM_SNAPSHOT_SECONDMATE_TIMEOUT, and FM_SNAPSHOT_SECONDMATE_MAX_BYTES.
+bound), FM_SNAPSHOT_SECONDMATE_TIMEOUT (per home), FM_SNAPSHOT_SECONDMATE_BUDGET
+(the whole cross-home pass; a home reached after it is spent reports the budget as
+its reason), and FM_SNAPSHOT_SECONDMATE_MAX_BYTES.
 Terminal contradiction evidence uses
 FM_SNAPSHOT_TERMINAL_LINES, FM_SNAPSHOT_TERMINAL_BYTES, and
 FM_SNAPSHOT_TERMINAL_TIMEOUT and never becomes canonical current state.
@@ -176,6 +193,25 @@ command -v jq >/dev/null 2>&1 || { echo "fm-fleet-snapshot: jq not found" >&2; e
 
 bool_json() {
   if [ "$1" = 1 ]; then printf 'true'; else printf 'false'; fi
+}
+
+# Stream whole JSON documents to a jq filter's stdin, in argument order.
+#
+# execve caps a SINGLE argument at 128 KiB on Linux (MAX_ARG_STRLEN) and caps the
+# whole argv+environment block on macOS, so any --argjson payload that grows with
+# the amount of work in a home eventually fails the exec outright. That failure is
+# indistinguishable at a cross-home call site from a home being unreadable, so a
+# home whose inventory merely got large is reported unknown and its real current
+# work disappears from every view built on this snapshot. A pipe has no such cap,
+# so every payload that scales with backlog, task, or record count travels here
+# instead; only fixed-size scalars stay on argv.
+# Each filter binds the stream with `[inputs]` and asserts the document count, so a
+# missing document is a loud error rather than a silent null binding.
+json_docs() {  # <json-doc>...
+  local doc
+  for doc in "$@"; do
+    printf '%s\n' "$doc"
+  done
 }
 
 path_present_json() {  # <path>
@@ -564,10 +600,9 @@ task_json_lines() {
 # Meta inventory remains the sole source of live workers; this object only
 # discloses backlog↔task inconsistency for renderers (Bearings omitted/gates).
 main_inventory_json() {  # <backlog-json> <tasks-json>
-  jq -n \
-    --argjson backlog "$1" \
-    --argjson tasks "$2" '
-    ([ $backlog.records[]?
+  json_docs "$1" "$2" | jq -n '
+    ([inputs] | if length == 2 then . else error("main inventory: expected 2 documents") end) as [$backlog, $tasks]
+    | ([ $backlog.records[]?
        | select((.state == "in_flight" or .state == "queued") and (.structured | not)) ]) as $unstructured_current
     | ([ $backlog.records[]?
          | select(.state == "in_flight" and .structured and .requires_child_metadata) ]) as $owned_in_flight
@@ -592,19 +627,18 @@ main_inventory_json() {  # <backlog-json> <tasks-json>
 # This mode never reads parent events or terminal text and never aggregates
 # nested secondmates.
 secondmate_home_summary_json() {  # <backlog-json> <tasks-json>
-  jq -n \
+  json_docs "$1" "$2" | jq -n \
     --arg generated "$SNAPSHOT_NOW" \
     --arg home "$FM_HOME" \
     --argjson child_n "$FM_SNAPSHOT_SECONDMATE_CHILDREN" \
     --argjson queued_n "$FM_SNAPSHOT_SECONDMATE_QUEUED" \
     --argjson decisions_n "$FM_SNAPSHOT_SECONDMATE_DECISIONS" \
-    --argjson landed_n "$FM_SNAPSHOT_SECONDMATE_LANDED_PER_HOME" \
-    --argjson backlog "$1" \
-    --argjson tasks "$2" '
+    --argjson landed_n "$FM_SNAPSHOT_SECONDMATE_LANDED_PER_HOME" '
     def trunc($n):
       tostring | gsub("\\s+"; " ")
       | if length > $n then .[:$n] + "…" else . end;
-    ([ $backlog.records[]?
+    ([inputs] | if length == 2 then . else error("home summary: expected 2 documents") end) as [$backlog, $tasks]
+    | ([ $backlog.records[]?
        | select((.state == "in_flight" or .state == "queued") and (.structured | not)) ]) as $unstructured_current
     | ([ $backlog.records[]? | select(.state == "in_flight" and .structured) ]) as $owned_in_flight
     | ([ $backlog.records[]?
@@ -1011,7 +1045,7 @@ terminal_evidence_json() {  # <parent-task-json> <event-note> <evidence-contradi
 }
 
 parent_evidence_reconciliation_json() {  # <summary-json> <activities-json> <decisions-json>
-  jq -n --argjson summary "$1" --argjson activities "$2" --argjson decisions "$3" '
+  json_docs "$1" "$2" "$3" | jq -n '
     def keyed: . != null and . != "" and . != "default";
     def result($e; $matches; $complete; $surface):
       $e + {
@@ -1022,7 +1056,9 @@ parent_evidence_reconciliation_json() {  # <summary-json> <activities-json> <dec
         compared_to:$surface,
         matched:(if ($e.key | keyed) then ($matches[0] // null) else null end)
       };
-    ([ $activities[] as $e
+    ([inputs] | if length == 3 then . else error("parent reconciliation: expected 3 documents") end)
+      as [$summary, $activities, $decisions]
+    | ([ $activities[] as $e
        | if $e.verb == "working" then
            ([ $summary.active_children[]
               | select(if ($e.key | keyed) then .id == $e.key else true end)
@@ -1073,11 +1109,15 @@ parent_evidence_reconciliation_json() {  # <summary-json> <activities-json> <dec
 secondmate_current_json() {  # <parent-tasks-json>
   local tasks=$1 registry union rows total_registered total shown truncated
   local row id home registered registry_error task status_file event_raw event_note event_epoch event_age
-  local activity_scan activities decisions reconciliation provenance freshness reason summary summary_rc summary_bytes summary_valid summary_reason summary_invalidity state current_reason terminal terminal_contradiction contradiction
-  local records='[]' seen_homes=''
+  local activity_scan activities decisions reconciliation provenance freshness reason summary summary_rc summary_bytes summary_valid state current_reason terminal terminal_contradiction contradiction
+  local records='[]' seen_homes='' budget_start budget_left home_timeout
+  # Real elapsed time, never SNAPSHOT_EPOCH: that is the declared observation time
+  # and is pinned by fixtures.
+  budget_start=$(date +%s)
   registry=$(registry_secondmates_json) || return 1
-  union=$(jq -n --argjson registry "$registry" --argjson tasks "$tasks" '
-    ($registry.records // []) as $registered
+  union=$(json_docs "$registry" "$tasks" | jq -n '
+    ([inputs] | if length == 2 then . else error("secondmate union: expected 2 documents") end) as [$registry, $tasks]
+    | ($registry.records // []) as $registered
     | (($registered | map(.id)) // []) as $registered_ids
     | ([ $registered[] as $r
          | $r + {parent_task:([$tasks[] | select(.id == $r.id)][0] // null)} ]
@@ -1139,7 +1179,15 @@ secondmate_current_json() {  # <parent-tasks-json>
       fi
     fi
     if [ -z "$reason" ]; then
-      summary=$(run_timed "$FM_SNAPSHOT_SECONDMATE_TIMEOUT" env \
+      budget_left=$((FM_SNAPSHOT_SECONDMATE_BUDGET - ($(date +%s) - budget_start)))
+      home_timeout=$FM_SNAPSHOT_SECONDMATE_TIMEOUT
+      [ "$budget_left" -lt "$home_timeout" ] && home_timeout=$budget_left
+    fi
+    if [ -z "$reason" ] && [ "$home_timeout" -le 0 ]; then
+      reason="cross-home read budget exhausted before this home was read"
+    fi
+    if [ -z "$reason" ]; then
+      summary=$(run_timed "$home_timeout" env \
         FM_ROOT_OVERRIDE="$FM_ROOT" \
         FM_HOME="$home" \
         FM_STATE_OVERRIDE="$home/state" \
@@ -1171,14 +1219,18 @@ secondmate_current_json() {  # <parent-tasks-json>
         ' >/dev/null 2>&1; then
           reason="structured home snapshot was malformed or stale"
         else
+          # A schema-valid, in-bounds, same-observation summary means the home WAS
+          # read. Its own inventory contradictions make the CLASSIFICATION unknown
+          # (the home summary already forces state "unknown" when it is not valid),
+          # but they never make the read itself untrustworthy: every retained
+          # surface is derived independently of the contradiction - active_children
+          # from working children on owned in-flight rows, decisions_open, queued,
+          # and landed from structured backlog rows. Dropping to the parent-event
+          # fallback here would discard a whole home's readable current work,
+          # including captain-actionable holds, over one bookkeeping mismatch.
+          # Only transport failures above - timeout, non-zero exit, byte limit,
+          # malformed or stale output - leave the home genuinely unread.
           summary_valid=$(printf '%s' "$summary" | jq -r '.valid')
-          if [ "$summary_valid" != true ]; then
-            summary_reason=$(printf '%s' "$summary" | jq -r '.reason // "unknown reason"')
-            summary_invalidity=$(printf '%s' "$summary" | jq -r '.invalidity.kind // "unknown"')
-            if [ "$summary_invalidity" != child_current_unavailable ]; then
-              reason="structured home state invalid: $summary_reason"
-            fi
-          fi
         fi
       fi
     fi
@@ -1200,13 +1252,14 @@ secondmate_current_json() {  # <parent-tasks-json>
           '{provenance:"parent-direct-report-terminal",trust:"untrusted-supplement",captured:false,observed_at:$observed,freshness:"not-collected",reason:"no useful contradiction check",lines:0,bytes:0,event_note_seen:false,contradiction:false}')
       fi
       if printf '%s' "$terminal" | jq -e '.contradiction == true' >/dev/null; then contradiction=true; fi
-      record=$(jq -n \
+      record=$(json_docs "$summary" "$decisions" "$activities" "$activity_scan" "$reconciliation" "$terminal" | jq -n \
         --arg id "$id" --arg home "$home" --arg state "$state" --arg current_reason "$current_reason" --arg observed "$SNAPSHOT_NOW" \
-        --argjson registered "$registered" --argjson summary "$summary" --argjson summary_valid "$summary_valid" --argjson decisions "$decisions" \
-        --argjson activities "$activities" --argjson activity_scan "$activity_scan" \
-        --argjson reconciliation "$reconciliation" --argjson terminal "$terminal" --argjson contradiction "$contradiction" \
+        --argjson registered "$registered" --argjson summary_valid "$summary_valid" \
+        --argjson contradiction "$contradiction" \
         --arg event_raw "$event_raw" --arg event_note "$event_note" --argjson event_age "$event_age" '
-        {id:$id,home:$home,registered:$registered,
+        ([inputs] | if length == 6 then . else error("secondmate record: expected 6 documents") end)
+          as [$summary, $decisions, $activities, $activity_scan, $reconciliation, $terminal]
+        | {id:$id,home:$home,registered:$registered,
          current:{state:$state,reason:($current_reason | if . == "" then null else . end)},invalidity:$summary.invalidity,
          provenance:{selected:"structured-home",structured_home:$home,summary_valid:$summary_valid,
            trust:(if $summary_valid then "complete" else "partial-structured" end),parent_event_role:"historical-only"},
@@ -1230,12 +1283,13 @@ secondmate_current_json() {  # <parent-tasks-json>
         terminal=$(jq -n --arg observed "$SNAPSHOT_NOW" \
           '{provenance:"parent-direct-report-terminal",trust:"untrusted-supplement",captured:false,observed_at:$observed,freshness:"not-collected",reason:"no parent event to compare",lines:0,bytes:0,event_note_seen:false,contradiction:false}')
       fi
-      record=$(jq -n \
+      record=$(json_docs "$activities" "$activity_scan" "$decisions" "$terminal" | jq -n \
         --arg id "$id" --arg home "$home" --arg reason "$reason" --arg observed "$SNAPSHOT_NOW" \
         --arg provenance "$provenance" --arg freshness "$freshness" --arg event_raw "$event_raw" --arg event_note "$event_note" \
-        --argjson registered "$registered" --argjson event_age "$event_age" --argjson activities "$activities" --argjson activity_scan "$activity_scan" \
-        --argjson decisions "$decisions" --argjson terminal "$terminal" '
-        {id:$id,home:($home | if . == "" then null else . end),registered:$registered,
+        --argjson registered "$registered" --argjson event_age "$event_age" '
+        ([inputs] | if length == 4 then . else error("secondmate fallback record: expected 4 documents") end)
+          as [$activities, $activity_scan, $decisions, $terminal]
+        | {id:$id,home:($home | if . == "" then null else . end),registered:$registered,
          current:{state:"unknown",reason:$reason},invalidity:null,
          provenance:{selected:$provenance,structured_home:($home | if . == "" then null else . end),parent_event_role:"fallback-only-not-current"},
          freshness:{status:$freshness,observed_at:$observed,age_seconds:$event_age},
@@ -1243,23 +1297,27 @@ secondmate_current_json() {  # <parent-tasks-json>
          parent_event:{raw:$event_raw,note:$event_note,age_seconds:$event_age,open_activities:$activities,open_decisions:$decisions,activity_scan:$activity_scan},
          terminal_evidence:$terminal,contradiction:false}')
     fi
-    records=$(jq -n --argjson records "$records" --argjson record "$record" '$records + [$record]')
+    records=$(json_docs "$records" "$record" | jq -n '
+      ([inputs] | if length == 2 then . else error("secondmate records: expected 2 documents") end)
+        as [$records, $record]
+      | $records + [$record]')
   done <<EOF
 $rows
 EOF
-  jq -n \
-    --argjson registry "$(printf '%s' "$union" | jq '.registry')" \
-    --argjson records "$records" \
+  json_docs "$(printf '%s' "$union" | jq '.registry')" "$records" | jq -n \
     --argjson total_registered "$total_registered" \
     --argjson total "$total" \
     --argjson shown "$shown" \
-    --argjson truncated "$truncated" \
-    '{registry:$registry,records:$records,total_registered:$total_registered,total:$total,shown:$shown,truncated:$truncated}'
+    --argjson truncated "$truncated" '
+    ([inputs] | if length == 2 then . else error("secondmate current: expected 2 documents") end)
+      as [$registry, $records]
+    | {registry:$registry,records:$records,total_registered:$total_registered,total:$total,shown:$shown,truncated:$truncated}'
 }
 
 secondmate_landed_from_current_json() {  # <secondmate-current-json>
-  jq -n --argjson current "$1" '
-    {records:[ $current.records[]
+  json_docs "$1" | jq -n '
+    ([inputs] | if length == 1 then . else error("secondmate landed: expected 1 document") end) as [$current]
+    | {records:[ $current.records[]
       | select(.provenance.selected == "structured-home") as $mate
       | $mate.landed[]
       | . + {home:$mate.home,home_id:$mate.id}],
@@ -1307,7 +1365,8 @@ SECONDMATE_CURRENT_JSON=$(secondmate_current_json "$TASKS_JSON") \
 SECONDMATE_LANDED_JSON=$(secondmate_landed_from_current_json "$SECONDMATE_CURRENT_JSON") \
   || { echo "fm-fleet-snapshot: secondmate landed projection failed" >&2; exit 1; }
 
-jq -n \
+json_docs "$BACKLOG_JSON" "$TASKS_JSON" "$MAIN_INVENTORY_JSON" \
+  "$SCOUT_REPORTS_JSON" "$SECONDMATE_CURRENT_JSON" "$SECONDMATE_LANDED_JSON" | jq -n \
   --arg generated "$SNAPSHOT_NOW" \
   --arg fm_home "$FM_HOME" \
   --arg fm_root "$FM_ROOT" \
@@ -1315,13 +1374,9 @@ jq -n \
   --arg data "$DATA" \
   --arg config "$CONFIG" \
   --arg projects "$PROJECTS" \
-  --argjson backlog "$BACKLOG_JSON" \
-  --argjson tasks "$TASKS_JSON" \
-  --argjson main_inventory "$MAIN_INVENTORY_JSON" \
-  --argjson scout_reports "$SCOUT_REPORTS_JSON" \
-  --argjson secondmate_current "$SECONDMATE_CURRENT_JSON" \
-  --argjson secondmate_landed "$SECONDMATE_LANDED_JSON" \
-  'def backlog_by_id($id): ($backlog.records[]? | select(.structured == true and .id == $id) | .) // null;
+  '([inputs] | if length == 6 then . else error("fleet snapshot: expected 6 documents") end)
+     as [$backlog, $tasks, $main_inventory, $scout_reports, $secondmate_current, $secondmate_landed]
+   | def backlog_by_id($id): ($backlog.records[]? | select(.structured == true and .id == $id) | .) // null;
    def task_by_id($id): ($tasks[]? | select(.id == $id) | .) // null;
    def report_kind($id): (task_by_id($id).kind // backlog_by_id($id).kind // "scout");
    {

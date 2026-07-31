@@ -481,14 +481,176 @@ test_bad_secondmate_homes_never_revive_parent_work() {
       and (.in_flight | map(.id) | all(. != "invalid" and . != "unreadable" and . != "malformed" and . != "timedout"))
       and (.secondmates | any(.[]; .id == "missing" and .provenance == "unknown"
         and .freshness == "unknown" and (.reason | contains("invalid home"))))
-      and ([.secondmates[] | select(.id != "missing")]
+      and ([.secondmates[] | select(.id != "missing" and .id != "malformed")]
         | all(.provenance == "parent-event-fallback" and .freshness == "historical-event"))
       and (.secondmates | any(.[]; .id == "invalid" and (.reason | contains("marked for"))))
       and (.secondmates | any(.[]; .id == "unreadable" and (.reason | test("invalid home|unreadable"))))
-      and (.secondmates | any(.[]; .id == "malformed" and (.reason | contains("unstructured current backlog row"))))
       and (.secondmates | any(.[]; .id == "timedout" and (.reason | contains("timed out"))))
+      # "malformed" is the one home here that ANSWERED. Its own inventory is
+      # self-contradictory, so its classification stays unknown and names the
+      # contradiction, but the read itself succeeded - it keeps structured-home
+      # provenance and fresh observation instead of being demoted to the
+      # historical parent-event fallback reserved for homes that never answered.
+      and (.secondmates | any(.[]; .id == "malformed" and .provenance == "structured-home"
+        and .freshness == "fresh"
+        and (.reason | contains("unstructured current backlog row"))))
   ' >/dev/null || fail "bad home outcomes revived stale work or lacked provenance: $json"
-  pass "missing, invalid, unreadable, malformed, and timed-out homes stay explicit unknowns"
+  pass "unread homes stay explicit unknowns while a home that answered keeps structured provenance"
+}
+
+# The reported defect: a home whose inventory outgrew what one execve argument can
+# carry (128 KiB on Linux, the whole argv block on macOS) failed the read outright,
+# so a busy home reported as unavailable and its real work vanished from every
+# section. Raising the timeout never fixed it - the failure was deterministic, and
+# the timeout only decided which of two wrong reasons the captain was shown.
+test_large_secondmate_inventory_is_still_read() {
+  local home mate quiet fakebin json backlog_bytes i
+  home=$(make_home large-inventory)
+  : > "$home/data/secondmates.md"
+  mate="$TMP_ROOT/large-inventory-secondmate-home"
+  quiet="$TMP_ROOT/large-inventory-quiet-home"
+  make_valid_secondmate_home large "$mate"
+  make_valid_secondmate_home quiet "$quiet"
+  append_secondmate_registry "$home" large "$mate"
+  append_secondmate_registry "$home" quiet "$quiet"
+  fm_write_secondmate_meta "$home/state/large.meta" "$mate" "firstmate:fm-large" sample
+  fm_write_secondmate_meta "$home/state/quiet.meta" "$quiet" "firstmate:fm-quiet" sample
+  printf 'working [key=old]: stale parent activity\n' > "$home/state/large.status"
+  printf 'working [key=old]: stale parent activity\n' > "$home/state/quiet.status"
+
+  # Long titles push the home's parsed backlog JSON past the single-argument exec
+  # limit while every row stays an ordinary, well-formed tasks-axi record.
+  printf '## In flight\n\n## Queued\n\n## Done\n' > "$mate/data/backlog.md"
+  i=1
+  while [ "$i" -le 220 ]; do
+    printf -- '- [x] landed-%03d - %s %03d https://github.com/kunchenguid/firstmate/pull/%d (repo: sample) (kind: ship) (merged 2026-07-13)\n' \
+      "$i" \
+      "Landed a genuinely long but entirely ordinary piece of secondmate work whose title carries enough detail to grow the parsed inventory" \
+      "$i" "$i" >> "$mate/data/backlog.md"
+    i=$((i + 1))
+  done
+  backlog_bytes=$(FM_HOME="$mate" FM_DATA_OVERRIDE="$mate/data" FM_STATE_OVERRIDE="$mate/state" \
+    FM_CONFIG_OVERRIDE="$mate/config" FM_PROJECTS_OVERRIDE="$mate/projects" \
+    "$ROOT/bin/fm-fleet-snapshot.sh" --json | jq -c '.backlog' | wc -c)
+  [ "$backlog_bytes" -gt 131072 ] \
+    || fail "fixture inventory ($backlog_bytes B) no longer exceeds the 131072 B single-argument exec limit"
+
+  fakebin=$(make_fakebin "$home")
+  json=$(FM_BEARINGS_LANDED=500 FM_BEARINGS_LANDED_PER_HOME=500 run "$home" "$fakebin" --json --all-landed)
+  printf '%s' "$json" | jq -e '
+    (.secondmates | any(.[]; .id == "large" and .provenance == "structured-home"
+      and .freshness == "fresh" and .state == "no_active_work"))
+      and (.landed | map(select(.owner == "large")) | length) == 220
+      and (.secondmates | any(.[]; .id == "quiet" and .provenance == "structured-home"))
+  ' >/dev/null || fail "a large but readable home lost its structured inventory: $json"
+  pass "an inventory larger than one exec argument is still read as structured-home state"
+}
+
+# The main home runs the same aggregation over its own inventory, where the same
+# overflow aborted the whole command instead of degrading one record.
+test_large_main_inventory_still_produces_a_snapshot() {
+  local home fakebin json i
+  home=$(make_home large-main)
+  : > "$home/data/secondmates.md"
+  printf '## In flight\n\n## Queued\n\n## Done\n' > "$home/data/backlog.md"
+  i=1
+  while [ "$i" -le 220 ]; do
+    printf -- '- [x] main-landed-%03d - %s %03d (repo: sample) (kind: ship) (merged 2026-07-13)\n' \
+      "$i" \
+      "Landed a genuinely long but entirely ordinary piece of main-home work whose title carries enough detail to grow the parsed inventory" \
+      "$i" >> "$home/data/backlog.md"
+    i=$((i + 1))
+  done
+  fakebin=$(make_fakebin "$home")
+  json=$(FM_BEARINGS_LANDED=500 FM_BEARINGS_LANDED_PER_HOME=500 run "$home" "$fakebin" --json --all-landed) \
+    || fail "the main snapshot aborted on a large inventory"
+  printf '%s' "$json" | jq -e '
+    .schema == "fm-bearings.v1"
+      and (.landed | map(select(.owner == "(main)")) | length) == 220
+  ' >/dev/null || fail "a large main inventory lost its landed work: $json"
+  pass "a main inventory larger than one exec argument still produces a complete snapshot"
+}
+
+# A home that ANSWERED keeps its independently derived surfaces even when its own
+# bookkeeping is self-contradictory, because the contradiction makes the
+# CLASSIFICATION unknown, not the read untrustworthy. Parent events still never
+# become current work: the home contributes no Underway row.
+test_contradictory_home_keeps_readable_surfaces() {
+  local home mate fakebin json wt
+  home=$(make_home contradictory)
+  : > "$home/data/secondmates.md"
+  mate="$TMP_ROOT/contradictory-secondmate-home"
+  make_valid_secondmate_home contradictory "$mate"
+  append_secondmate_registry "$home" contradictory "$mate"
+  write_parent_secondmate_event "$home" contradictory "$mate" "stale parent claim of phase 9"
+
+  # A live child with no in-flight backlog row: a real inventory contradiction.
+  wt="$mate/projects/unowned"
+  mkdir -p "$wt"
+  cat > "$mate/data/backlog.md" <<'EOF'
+## In flight
+
+## Queued
+- [ ] mate-gate - Queued behind an external dependency blocked-by: external-thing (repo: sample) (kind: ship)
+
+## Done
+- [x] mate-landed - Secondmate-managed fix https://github.com/kunchenguid/firstmate/pull/51 (repo: sample) (kind: ship) (merged 2026-07-13)
+EOF
+  fm_write_meta "$mate/state/unowned.meta" \
+    "window=firstmate:fm-unowned" "worktree=$wt" "project=sample" \
+    "harness=claude" "kind=ship" "mode=no-mistakes"
+  printf 'needs-decision [key=shape]: pick the rollout shape\n' > "$mate/state/unowned.status"
+
+  fakebin=$(make_fakebin "$home")
+  json=$(run "$home" "$fakebin" --json)
+  printf '%s' "$json" | jq -e '
+    (.secondmates | any(.[]; .id == "contradictory" and .state == "unknown"
+      and .provenance == "structured-home" and .freshness == "fresh"
+      and (.reason | contains("live child state has no in-flight backlog item"))))
+      and (.landed | any(.owner == "contradictory" and .id == "mate-landed"))
+      and (.gates | any(.owner == "contradictory" and .id == "mate-gate"))
+      and (.in_flight | any(.id == "contradictory") | not)
+      and (.secondmates | any(.[]; .doing | contains("phase 9")) | not)
+  ' >/dev/null || fail "a contradictory but readable home lost its surfaces or revived a parent event: $json"
+  pass "a self-contradictory home keeps readable surfaces without reviving parent events"
+}
+
+# The cross-home pass stays bounded as a whole, not just per home, and a home the
+# budget never reached says so instead of silently looking healthy or empty.
+test_cross_home_budget_is_bounded_and_explicit() {
+  local home id mate fakebin json started elapsed
+  local wt
+  home=$(make_home budget)
+  : > "$home/data/secondmates.md"
+  for id in a b c; do
+    mate="$TMP_ROOT/budget-$id"
+    make_valid_secondmate_home "$id" "$mate"
+    append_secondmate_registry "$home" "$id" "$mate"
+    write_parent_secondmate_event "$home" "$id" "$mate" "old $id work"
+    # One child per home, so each home's read costs a live child-state call and the
+    # pass actually spends the budget instead of finishing instantly.
+    wt="$mate/projects/slow"
+    fm_git_init_commit "$wt"
+    git -C "$wt" checkout -q -b "fm/slow-$id"
+    printf '## In flight\n- [ ] slow - Slow child (repo: sample) (kind: ship) (since 2026-07-13)\n\n## Queued\n\n## Done\n' \
+      > "$mate/data/backlog.md"
+    fm_write_meta "$mate/state/slow.meta" \
+      "window=firstmate:fm-slow" "worktree=$wt" "project=sample" \
+      "harness=codex" "kind=ship" "mode=no-mistakes"
+  done
+  fakebin=$(make_fakebin "$home")
+  started=$(date +%s)
+  json=$(FAKE_NM_SLEEP=1 FM_SNAPSHOT_SECONDMATE_TIMEOUT=2 FM_SNAPSHOT_SECONDMATE_BUDGET=3 \
+    run "$home" "$fakebin" --json)
+  elapsed=$(( $(date +%s) - started ))
+  [ "$elapsed" -lt 30 ] || fail "cross-home reads were not bounded by the budget (${elapsed}s)"
+  printf '%s' "$json" | jq -e '
+    (.secondmates | length) == 3
+      and all(.secondmates[]; .state == "unknown" and .provenance == "parent-event-fallback")
+      and (.secondmates | any(.[]; .reason | contains("budget exhausted")))
+      and (.in_flight | length) == 0
+  ' >/dev/null || fail "budget exhaustion was not bounded or not disclosed: $json"
+  pass "the cross-home pass is bounded overall and names budget exhaustion explicitly"
 }
 
 test_oversized_secondmate_summary_stays_strict_unknown() {
@@ -1699,15 +1861,17 @@ EOF
   printf '%s' "$canonical" | jq -e '
     .secondmate_current.records[] | select(.id == "sshhip")
     | .current.state == "unknown"
+      # Precedence is what matters here: the orphan outranks the unknown child, so
+      # the reason names the orphan rather than the softer child gap. The home still
+      # answered, so its independently derived surfaces survive the contradiction.
       and (.current.reason | contains("in-flight backlog item has no child metadata: ordinary-orphan"))
-      and .provenance.selected != "structured-home"
-      and .invalidity == null
+      and .invalidity == {kind:"orphan_in_flight",ids:["ordinary-orphan"]}
+      and .provenance.selected == "structured-home"
+      and .provenance.trust == "partial-structured"
       and .active_children == []
-      and .decisions_open == []
-      and .holds == []
-      and .queued == []
-      and .landed == []
-      and .endpoints == []
+      and [.decisions_open[].id] == ["reviewer-decision"]
+      and [.queued[].id] == ["reviewer-decision"]
+      and [.landed[].id] == ["prior-release"]
   ' >/dev/null || fail "an unknown child masked a simultaneous ordinary orphan: $canonical"
   sed '/ordinary-orphan/d' "$sshhip/data/backlog.md" > "$sshhip/data/backlog.next"
   mv "$sshhip/data/backlog.next" "$sshhip/data/backlog.md"
@@ -1720,14 +1884,14 @@ EOF
     .secondmate_current.records[] | select(.id == "sshhip")
     | .current.state == "unknown"
       and (.current.reason | contains("live child state has no in-flight backlog item: unreadable-child=unknown"))
-      and .provenance.selected != "structured-home"
-      and .invalidity == null
+      and .invalidity == {kind:"unowned_current",ids:["unreadable-child"]}
+      and .provenance.selected == "structured-home"
+      and .provenance.trust == "partial-structured"
+      # An unowned child is never promoted into current work...
       and .active_children == []
-      and .decisions_open == []
-      and .holds == []
-      and .queued == []
-      and .landed == []
-      and .endpoints == []
+      # ...while the surfaces that do not depend on it stay readable.
+      and [.decisions_open[].id] == ["reviewer-decision"]
+      and [.landed[].id] == ["prior-release"]
   ' >/dev/null || fail "an unowned unknown child received partial structured projection: $canonical"
   sed '/## In flight/a\
 - [ ] unreadable-child - Submit App Store build (repo: sshhip) (kind: ship)' \
@@ -1808,14 +1972,15 @@ EOF
     .secondmate_current.records[] | select(.id == "hibit")
     | .current.state == "unknown"
       and (.current.reason | contains("in-flight backlog item has no child metadata: dogfood-program"))
-      and .provenance.selected != "structured-home"
-      and .active_children == []
-      and .decisions_open == []
-      and .holds == []
-      and .queued == []
-      and .landed == []
-      and .endpoints == []
-  ' >/dev/null || fail "an unrecognized worker kind no longer stayed strict: $canonical"
+      and .invalidity == {kind:"orphan_in_flight",ids:["dogfood-program"]}
+      and .provenance.selected == "structured-home"
+      and .provenance.trust == "partial-structured"
+      # An unrecognized kind stops the row counting as a program exemption, which
+      # makes the classification unknown - but the sibling worker that really is
+      # running keeps its own independently derived row.
+      and [.active_children[].id] == ["hibit-worker"]
+      and [.endpoints[].id] == ["hibit-worker"]
+  ' >/dev/null || fail "an unrecognized worker kind lost its unrelated readable surfaces: $canonical"
   pass "mixed secondmate roles, partial state, and captain readiness project independently"
 }
 
@@ -1896,6 +2061,10 @@ test_active_child_overrides_old_parent_event
 test_structured_child_decision_reaches_captains_call
 test_bad_secondmate_homes_never_revive_parent_work
 test_oversized_secondmate_summary_stays_strict_unknown
+test_large_secondmate_inventory_is_still_read
+test_large_main_inventory_still_produces_a_snapshot
+test_contradictory_home_keeps_readable_surfaces
+test_cross_home_budget_is_bounded_and_explicit
 test_secondmate_and_child_bounds_are_disclosed
 test_parent_decision_is_untrusted_contradiction_only
 test_parent_evidence_reconciles_by_verb_and_key

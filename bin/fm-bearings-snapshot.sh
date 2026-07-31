@@ -255,7 +255,12 @@ EOF
       cnt=$(printf '%s' "$repo_rows" | jq 'length')
       [ "$returned" -gt "$FM_BEARINGS_PR_LIMIT" ] && ncapped=$((ncapped + 1))
       npr=$((npr + cnt))
-      rows=$(jq -n --argjson a "$rows" --argjson b "$repo_rows" '$a + $b')
+      # Accumulated rows grow with every repository, and --all-pr-repos lifts the
+      # repository cap entirely, so this joins over stdin: execve caps one argument
+      # at 128 KiB on Linux and the whole argv block on macOS.
+      rows=$(printf '%s\n%s\n' "$rows" "$repo_rows" | jq -n '
+        ([inputs] | if length == 2 then . else error("candidate PR rows: expected 2 documents") end)
+          as [$a, $b] | $a + $b')
     done
     PR_REPOS_SHOWN=$nrepos
     PR_ROWS_CAPPED=$ncapped
