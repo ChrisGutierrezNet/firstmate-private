@@ -105,4 +105,4 @@ The order that matters is:
 4. Execute only with the plan id that preflight printed, so evidence that changed in between refuses instead of removing a tree nobody approved.
 
 A refusal from that helper is a stop-and-report result, never an obstacle to route around: do not force, prune, stash, reset, or discard anything to make a check pass, and do not fall back to a raw removal command.
-Once the captain's approval is concrete and the helper's own checks pass, AGENTS.md hard rule 1's guarded project-retirement exception authorizes running it.
+Once the captain's approval is concrete and the helper's own checks pass, AGENTS.md hard rule 1's guarded out-of-registry project-tree retirement exception authorizes running it.
