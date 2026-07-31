@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
 # fm-project-retire.sh - the single guarded owner of retiring a captain-approved
-# project tree: a clone (or a small tree of clones) plus, optionally, the linked
-# Treehouse pool whose slots are worktrees of that tree.
+# out-of-registry project tree: a legacy clone (or a small tree of clones) left
+# behind by an earlier layout, plus, optionally, the linked Treehouse pool whose
+# slots are worktrees of that tree.
 #
 # It exists because AGENTS.md hard rule 1 forbids a raw removal command under a
-# project tree, and the project-management skill's Remove procedure needs one
+# project tree, and the project-management skill's retirement procedure needs one
 # owner that PROVES, before any mutation, that nothing unlanded, still
 # referenced, or still in use would be destroyed. Every check below is a refusal
 # condition: an inability to prove a condition is a blocker, never a reason to
 # proceed.
+#
+# Scope: out-of-registry trees only. A registered project under this home's
+# `projects/` is deliberately out of scope and always refuses here; removing one
+# follows the project-management skill's registered-project path under hard
+# rule 1's captain-approved project operation exception instead.
 #
 # Usage:
 #   fm-project-retire.sh --root <abs> --boundary <abs> [--boundary <abs>]...

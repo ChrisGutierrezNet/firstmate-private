@@ -78,21 +78,31 @@ If doctor reports an environment, authentication, or daemon problem, resolve tha
 ## Remove or retire
 
 Project removal is destructive, and so is retiring an out-of-registry legacy tree left behind by an earlier layout.
-Both follow the same path.
+Both start from the same preflight, and they differ only in what performs the removal.
 
 First obtain the captain's explicit removal decision, then inspect the current digest and authoritative repositories for in-flight or queued work, registered secondmate clones, linked worktrees, dirty files, unpushed commits, and any other unlanded work.
 If any dependency or unlanded work exists, stop and report it before changing anything.
 Never issue a raw removal command from Firstmate.
+When a clone has already been removed through an approved removal, or the registry is provably stale because no clone exists, remove its registry line so navigation matches reality.
 
-`bin/fm-project-retire.sh` is the single guarded owner of the removal itself.
+### Remove a registered project
+
+A project registered in `data/projects.md` and living under this home's `projects/` keeps its own path.
+Once that preflight confirms none of the above and the captain's approval is concrete, AGENTS.md hard rule 1's captain-approved project operation exception authorizes firstmate to remove the clone directly and update its registry entry to match.
+`bin/fm-project-retire.sh` does not cover this case: it refuses on any path inside this home's `projects/` or named by the registry, and that refusal is a deliberate scope boundary, not a step to work around.
+
+### Retire an out-of-registry tree
+
+A legacy tree outside `projects/`, such as an old clone plus its linked Treehouse pool left behind by an earlier layout, is retired only through the guarded helper.
+
+`bin/fm-project-retire.sh` is the single guarded owner of that removal itself.
 Its header and `--help` own the exact flags, the complete refusal list, the landing-proof ladder, and every mechanic; do not restate them here or anywhere else.
 The order that matters is:
 
 1. Get the captain's concrete approval for that specific tree.
-2. Retire the tree's registry line first, because the helper refuses while `data/projects.md` or `data/secondmates.md` still names the path; a registry line without a clone is navigable, a clone the registry still points at is not.
+2. Retire any stale registry line that still names the tree first, because the helper refuses while `data/projects.md` or `data/secondmates.md` names the path; a registry line without a clone is navigable, a clone the registry still points at is not. Never delete a live registered project's line to move it out of the helper's refusal list; that project uses the direct path above.
 3. Run the helper's preflight, read the printed plan end to end, and confirm it names exactly the tree and linked pool the captain approved.
 4. Execute only with the plan id that preflight printed, so evidence that changed in between refuses instead of removing a tree nobody approved.
 
 A refusal from that helper is a stop-and-report result, never an obstacle to route around: do not force, prune, stash, reset, or discard anything to make a check pass, and do not fall back to a raw removal command.
 Once the captain's approval is concrete and the helper's own checks pass, AGENTS.md hard rule 1's guarded project-retirement exception authorizes running it.
-When a clone has already been removed through an approved removal, or the registry is provably stale because no clone exists, remove its registry line so navigation matches reality.
