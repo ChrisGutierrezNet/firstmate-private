@@ -17,6 +17,7 @@ make_fakebin() {  # <dir>
   fb=$(fm_fakebin "$1")
   cat > "$fb/no-mistakes" <<'SH'
 #!/usr/bin/env bash
+[ "${FAKE_NM_SLEEP:-0}" = 1 ] && sleep 1
 exit 0
 SH
   cat > "$fb/tmux" <<'SH'
@@ -905,6 +906,51 @@ test_large_inventory_snapshot_survives_argv_limit() {
   pass "snapshot and secondmate summary complete on an inventory past the per-argument exec limit"
 }
 
+test_secondmate_summary_budget_excludes_repeated_child_probe_wallclock() {
+  local home mate fakebin out i child
+  home=$(make_home summary-budget-parent)
+  mate=$(make_home summary-budget-mate)
+  mkdir -p "$mate/data" "$mate/state" "$mate/config" "$mate/projects" "$mate/bin"
+  printf '# Firstmate\n' > "$mate/AGENTS.md"
+  printf 'delegate\n' > "$mate/.fm-secondmate-home"
+  printf '## In flight\n' > "$mate/data/backlog.md"
+  i=1
+  while [ "$i" -le 6 ]; do
+    child="child-$i"
+    mkdir -p "$mate/projects/$child"
+    printf -- '- [ ] %s - Child %s (repo: alpha) (kind: ship) (since 2026-07-11)\n' \
+      "$child" "$i" >> "$mate/data/backlog.md"
+    fm_write_meta "$mate/state/$child.meta" \
+      "window=firstmate:fm-$child" \
+      "worktree=$mate/projects/$child" \
+      "project=alpha" "harness=codex" "kind=ship" "mode=ship" "yolo=off"
+    printf 'working: child %s\n' "$i" > "$mate/state/$child.status"
+    i=$((i + 1))
+  done
+  printf '\n## Queued\n\n## Done\n' >> "$mate/data/backlog.md"
+  printf -- '- delegate - delegated scope (home: %s; scope: delegated scope; projects: alpha; added 2026-07-11)\n' \
+    "$mate" > "$home/data/secondmates.md"
+  fm_write_meta "$home/state/delegate.meta" \
+    "window=firstmate:fm-delegate" \
+    "worktree=$mate" "project=$mate" "harness=codex" \
+    "kind=secondmate" "mode=secondmate" "yolo=off" \
+    "home=$mate" "projects=alpha"
+  printf 'working: watching delegated scope\n' > "$home/state/delegate.status"
+  fakebin=$(make_fakebin "$home")
+
+  out=$(PATH="$fakebin:$PATH" FAKE_NM_SLEEP=1 FM_HOME="$home" \
+    FM_SNAPSHOT_SECONDMATE_TIMEOUT=3 "$SNAPSHOT" --json) \
+    || fail "secondmate summary timed out when repeated child probes should run within the summary budget"
+  printf '%s' "$out" | jq -e '
+    .secondmate_current.records[] | select(.id == "delegate")
+    | .provenance.selected == "structured-home"
+      and .current.state == "active_child_work"
+      and .counts.active_children == 6
+      and (.active_children | length) == 6
+  ' >/dev/null || fail "budgeted secondmate summary did not retain structured child activity: $out"
+  pass "secondmate summary budget excludes repeated child-probe wall-clock"
+}
+
 # Deterministic proof independent of the host's own limit: a jq shim rejects any
 # --arg/--argjson VALUE over the threshold. Filter programs are fixed source text
 # and are deliberately not checked - only data transport is.
@@ -1016,6 +1062,7 @@ test_empty_upstream_read_stops_the_snapshot() {
 
 test_empty_fleet_json
 test_large_inventory_snapshot_survives_argv_limit
+test_secondmate_summary_budget_excludes_repeated_child_probe_wallclock
 test_snapshot_keeps_large_json_off_the_command_line
 test_empty_upstream_read_stops_the_snapshot
 test_fixture_snapshot_json
