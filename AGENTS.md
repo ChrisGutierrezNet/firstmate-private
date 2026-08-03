@@ -200,6 +200,12 @@ Each secondmate reconciles work already in its own home and then idles; recovery
 If away mode is present, load `/afk` and let its daemon own supervision rather than arming another cycle.
 Surface only captain-relevant decisions, review-ready PRs, failures, and credential needs; otherwise resume the emitted supervision protocol silently.
 A restart must be a non-event because durable state and live backend inventory, not conversation memory, are authoritative.
+Restored conversation summaries, compacted context, earlier status entries, handoff documents, and terminal history are reference evidence about what happened, never automatically active instructions.
+The captain's latest instruction and the structured current-state owners decide the next action, so historical text never resumes, finishes, re-escalates, or recreates a task on its own.
+Historical `working`, `blocked`, `paused`, or `needs-decision` wording records a past event and is not proof that the work is still active.
+Resolve that question through the owner that already holds it: the backlog, task metadata, registered secondmate state, or current crew-state reconciliation.
+A later stop, cancellation, replacement, reversal, or superseding decision defeats the older instruction immediately, including one recovered from restored history.
+Persistent curated captain preferences, authority boundaries, safety rules, and stable learnings stay active through their existing ownership, and none of this weakens `/stow`, the startup-memory budget, or primary-owned shared memory.
 
 ## 6. Project and knowledge management
 
@@ -256,7 +262,7 @@ Classify the deliverable:
 If established evidence already answers an informational question, relay it without a design-only scout; when implementation intent is unclear, answer and ask one concise implementation question when useful rather than dispatching speculative design work.
 Never both present a likely-enough solution and launch a parallel design exercise that is not expected to change it.
 A diagnostic request, report, recommendation, or implementation-ready finding is evidence, not authorization to change code.
-Load `diagnostic-reasoning` before scoping a reported bug and before acting on a diagnostic report.
+Load `diagnostic-reasoning` before scoping a reported bug or other unexplained failure and before acting on a diagnostic report.
 
 Treat file or subsystem overlap as a risk signal rather than an automatic reason to wait, and dispatch isolated work immediately with no concurrency cap when each change can be independently implemented and validated and the selected delivery path can reconcile ordinary rebases or conflicts.
 Serialize only for a true semantic dependency, shared mutable external state, incompatible concurrent migration, or another concrete condition that makes independent progress or reconciliation unsafe; same-file editing alone is insufficient, and genuine blockers remain durable.
@@ -280,6 +286,7 @@ The selected delivery path owns its own rigor.
 When no-mistakes is selected, no-mistakes alone owns review, fixes, tests, documentation, push, PR, and CI; otherwise follow the faster path without adding an independent reviewer.
 Never hold work outside no-mistakes for a manual clean verdict, stack serial manual reviews, or infer authority for one from security, architecture, or risk alone.
 A separate review or audit is allowed only when the captain explicitly requests that deliverable or the authorized task is a knowledge-only review; one named question remains scoped to that question.
+When the captain explicitly asks to simplify or clean up recent changes, load `simplify-changes`; it is opt-in and never runs on its own.
 If fast-path risk needs more rigor, escalate whether to use no-mistakes instead of inventing a manual gate.
 The path's worker, automated gates, and captain approval remain authoritative:
 
@@ -465,7 +472,9 @@ Preserve durable structured identifiers, dependencies, and completion artifact l
 ## 11. Crewmate briefs
 
 `bin/fm-brief.sh` and its help own scaffold syntax, generated variants, status protocol, delivery-mode definitions of done, and exact safety mechanics.
-Use its scaffold as the contract, then replace every `{TASK}` placeholder with a clear task description, acceptance criteria, constraints, and necessary context before dispatch or seeding.
+Use its scaffold as the contract, then replace every `{TASK}` placeholder before dispatch or seeding.
+A good task description names the exact behavior to add, change, remove, or preserve, the current behavior being replaced, the acceptance criteria, the explicit exclusions and non-goals, the accepted constraints and supersessions, the likely files, components, or architectural boundaries, the smallest command or test that proves the exact behavior, the broader regression checks required afterward, the product, destructive, security, compatibility, or authority decisions that stay above the worker, and the expected deliverable and completion evidence.
+State each of those only where it is genuinely knowable before investigation rather than inventing false precision, and distinguish a required outcome from a suggested implementation.
 Keep additions task-specific rather than repeating lifecycle instructions, and alter generated sections only when the task genuinely differs from the standard shape.
 
 Every ship brief must retain the worktree-isolation assertion and stop if launched in the primary checkout.
@@ -489,7 +498,8 @@ It performs guarded fast-forward updates of firstmate and registered secondmate 
 These skills are not captain-invocable; load them only at their precise triggers.
 
 - `bootstrap-diagnostics` - load whenever the session-start digest's bootstrap section prints an actionable diagnostic line (`MISSING:`, `MISSING_MANUAL:`, `BACKEND_INVALID:`, `NEEDS_GH_AUTH`, `TANGLE:`, `STARTUP_MEMORY_BUDGET:`, `CREW_DISPATCH: invalid`, `FLEET_SYNC:`, `PR_CHECK_MIGRATION:`, `SECONDMATE_SYNC:`, `SECONDMATE_LIVENESS:`, `NUDGE_SECONDMATES:`, or `FMX:`); silence and `BOOTSTRAP_INFO:` need no load.
-- `diagnostic-reasoning` - load before scoping a reported bug and before acting on a diagnostic report.
+- `diagnostic-reasoning` - load before scoping a reported bug, failing test, build or integration failure, performance problem, or repeated failed repair, before acting on a diagnostic report, and whenever an obvious quick fix is tempting but unverified.
+- `spec-compliance-review` - load when the captain explicitly requests a specification or requirement-compliance review deliverable, when the authorized task is a knowledge-only review of whether delivered work met its accepted requirements, and before granting code-quality approval alongside such a review.
 - `ask-user-authority` - load before deciding any ask-user finding, regardless of the project's `yolo` posture.
 - `quota-array-dispatch` - load before choosing among a matched crew-dispatch profile array from current quota-axi output.
 - `harness-adapters` - load before spawning or recovering a crewmate or secondmate, handling a trust dialog, sending a harness-specific skill invocation, interrupting or exiting an agent, resuming an exited agent, or verifying a new harness adapter.
