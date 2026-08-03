@@ -70,6 +70,13 @@ record_claude_idle() {  # <state-dir> <id>
     --source claude-hook --event stop
 }
 
+record_claude_busy() {  # <state-dir> <id>
+  local state=$1 id=$2 gen
+  gen=$("$ROOT/bin/fm-busy-event.sh" arm "$state" "$id")
+  "$ROOT/bin/fm-busy-event.sh" apply "$state" "$id" busy --gen "$gen" \
+    --source claude-hook --event user-prompt-submit
+}
+
 write_fixture() {  # <home>
   local home=$1 fixture_gen
   mkdir -p "$home/projects/alpha-worktree" "$home/projects/scout-worktree" "$home/secondmate-home"
@@ -943,9 +950,13 @@ write_preserved_child() {  # <mate-home> <id> <status-line> [pr-url]
     "window=firstmate:fm-$id" \
     "endpoint_task_id=$id" \
     "worktree=$mate/projects/$id" \
-    "project=alpha" "harness=codex" "kind=ship" "mode=no-mistakes" "yolo=off"
+    "project=alpha" "harness=claude" "kind=ship" "mode=no-mistakes" "yolo=off"
   [ -n "$pr" ] && printf 'pr=%s\n' "$pr" >> "$mate/state/$id.meta"
   printf '%s\n' "$line" > "$mate/state/$id.status"
+  # A crew whose monitor was cancelled is semantically IDLE, and only an exact
+  # idle verdict lets fm-crew-state.sh consult the status log for the terminal
+  # state this fixture is about (bin/fm-busy-lib.sh; unknown is never idle).
+  record_claude_idle "$mate/state" "$id"
 }
 
 register_preserved_secondmate() {  # <parent-home> <mate-home>
@@ -1047,8 +1058,11 @@ test_secondmate_summary_budget_excludes_repeated_child_probe_wallclock() {
     fm_write_meta "$mate/state/$child.meta" \
       "window=firstmate:fm-$child" \
       "worktree=$mate/projects/$child" \
-      "project=alpha" "harness=codex" "kind=ship" "mode=ship" "yolo=off"
+      "project=alpha" "harness=claude" "kind=ship" "mode=ship" "yolo=off"
     printf 'working: child %s\n' "$i" > "$mate/state/$child.status"
+    # Working children prove it through their own semantic busy-state record,
+    # which is what the summary's current-state read consults.
+    record_claude_busy "$mate/state" "$child"
     i=$((i + 1))
   done
   printf '\n## Queued\n\n## Done\n' >> "$mate/data/backlog.md"
