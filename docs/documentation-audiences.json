@@ -173,6 +173,14 @@
       "audience": "agent-runtime"
     },
     {
+      "path": ".agents/skills/simplify-changes/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": ".agents/skills/spec-compliance-review/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
       "path": ".agents/skills/stow/SKILL.md",
       "audience": "agent-runtime"
     },
