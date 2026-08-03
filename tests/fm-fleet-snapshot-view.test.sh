@@ -906,6 +906,130 @@ test_large_inventory_snapshot_survives_argv_limit() {
   pass "snapshot and secondmate summary complete on an inventory past the per-argument exec limit"
 }
 
+# A finished or deliberately cancelled child whose delivery artifact is preserved
+# unlanded is not an inventory contradiction. The in-flight row that carries the
+# hold, and the queued row the work was moved to, both already state that no
+# worker is running; only a row that still claims a live worker contradicts a
+# terminal child, and only an unrecorded id contradicts the inventory. Without
+# that boundary a whole readable home degraded to unknown, hiding its backlog and
+# its preserved open PRs, and the only way to silence it would have been deleting
+# task records that unlanded branches still depend on.
+write_preserved_artifact_home() {  # <mate-home> [extra-in-flight-row] [extra-queued-row]
+  local mate=$1 extra_in_flight=${2:-} extra_queued=${3:-}
+  mkdir -p "$mate/data" "$mate/state" "$mate/config" "$mate/projects" "$mate/bin"
+  printf '# Firstmate\n' > "$mate/AGENTS.md"
+  printf 'delegate\n' > "$mate/.fm-secondmate-home"
+  {
+    printf '## In flight\n'
+    printf -- '- [ ] preserved-pr - Preserved release https://github.com/kunchenguid/firstmate/pull/1001 (repo: alpha) (kind: ship) (since 2026-08-01) (hold: Complete and preserved; not landed.) (hold-kind: external)\n'
+    [ -n "$extra_in_flight" ] && printf '%s\n' "$extra_in_flight"
+    printf '\n## Queued\n'
+    printf -- '- [ ] held-intake - Held intake behind an open PR (repo: alpha) (kind: ship) (since 2026-08-01) (hold: PR 1005 unapproved for merge.) (hold-kind: external)\n'
+    [ -n "$extra_queued" ] && printf '%s\n' "$extra_queued"
+    printf '\n## Done\n'
+  } > "$mate/data/backlog.md"
+  write_preserved_child "$mate" preserved-pr \
+    'failed: run cancelled to stop merge-monitoring; PR 1001 open, unmerged, not deployed' \
+    https://github.com/kunchenguid/firstmate/pull/1001
+  write_preserved_child "$mate" held-intake \
+    'failed: run cancelled deliberately; PR 1005 open, unmerged, awaiting the captain' \
+    https://github.com/kunchenguid/firstmate/pull/1005
+}
+
+write_preserved_child() {  # <mate-home> <id> <status-line> [pr-url]
+  local mate=$1 id=$2 line=$3 pr=${4:-}
+  mkdir -p "$mate/projects/$id"
+  fm_write_meta "$mate/state/$id.meta" \
+    "window=firstmate:fm-$id" \
+    "endpoint_task_id=$id" \
+    "worktree=$mate/projects/$id" \
+    "project=alpha" "harness=codex" "kind=ship" "mode=no-mistakes" "yolo=off"
+  [ -n "$pr" ] && printf 'pr=%s\n' "$pr" >> "$mate/state/$id.meta"
+  printf '%s\n' "$line" > "$mate/state/$id.status"
+}
+
+register_preserved_secondmate() {  # <parent-home> <mate-home>
+  local home=$1 mate=$2
+  printf '## In flight\n\n## Queued\n\n## Done\n' > "$home/data/backlog.md"
+  printf -- '- delegate - delegated scope (home: %s; scope: delegated scope; projects: alpha; added 2026-08-01)\n' \
+    "$mate" > "$home/data/secondmates.md"
+  fm_write_secondmate_meta "$home/state/delegate.meta" "$mate"
+  printf 'working: watching delegated scope\n' > "$home/state/delegate.status"
+}
+
+test_preserved_terminal_artifact_stays_charted() {
+  local home mate fakebin out
+  home=$(make_home preserved-parent)
+  mate=$(make_home preserved-mate)
+  write_preserved_artifact_home "$mate"
+  register_preserved_secondmate "$home" "$mate"
+  fakebin=$(make_fakebin "$home")
+
+  out=$(PATH="$fakebin:$PATH" FM_HOME="$mate" "$SNAPSHOT" --secondmate-home-summary) \
+    || fail "the home summary must succeed on preserved terminal artifacts"
+  printf '%s' "$out" | jq -e '
+    .valid == true
+      and .reason == null
+      and .invalidity.kind == null
+      and .state == "externally_held"
+      and .active_children == []
+      and .landed == []
+      and ([.holds[].id] | sort) == ["held-intake","preserved-pr"]
+      and ([.endpoints[] | select(.state == "failed") | .id] | sort) == ["held-intake","preserved-pr"]
+  ' >/dev/null || fail "preserved terminal artifacts were not charted as held: $out"
+
+  out=$(PATH="$fakebin:$PATH" FM_HOME="$home" "$SNAPSHOT" --json) \
+    || fail "the parent snapshot must succeed over a home holding preserved terminal artifacts"
+  printf '%s' "$out" | jq -e '
+    .secondmate_current.records[] | select(.id == "delegate")
+    | .provenance.selected == "structured-home"
+      and .provenance.summary_valid == true
+      and .current.state == "externally_held"
+      and .current.reason == null
+      and .active_children == []
+      and ([.holds[].id] | sort) == ["held-intake","preserved-pr"]
+  ' >/dev/null || fail "a readable home with preserved terminal artifacts degraded to unknown: $out"
+
+  # A row that still claims a live worker is the real terminal contradiction.
+  mate=$(make_home preserved-mate-stalled)
+  write_preserved_artifact_home "$mate" \
+    '- [ ] stalled-worker - Ship still claimed as under way (repo: alpha) (kind: ship) (since 2026-08-01)'
+  write_preserved_child "$mate" stalled-worker 'failed: run failed'
+  out=$(PATH="$fakebin:$PATH" FM_HOME="$mate" "$SNAPSHOT" --secondmate-home-summary) \
+    || fail "the home summary must succeed on a stalled worker row"
+  printf '%s' "$out" | jq -e '
+    .valid == false
+      and .state == "unknown"
+      and .invalidity == {kind:"terminal_in_flight",ids:["stalled-worker"]}
+  ' >/dev/null || fail "an in-flight worker row with a terminal child stopped being invalid: $out"
+
+  # A live child under a row that claims no worker is still off the books.
+  mate=$(make_home preserved-mate-runaway)
+  write_preserved_artifact_home "$mate" "" \
+    '- [ ] runaway - Queued while a worker runs (repo: alpha) (kind: ship) (since 2026-08-01)'
+  write_preserved_child "$mate" runaway 'working: implementing the change'
+  out=$(PATH="$fakebin:$PATH" FM_HOME="$mate" "$SNAPSHOT" --secondmate-home-summary) \
+    || fail "the home summary must succeed on a runaway child"
+  printf '%s' "$out" | jq -e '
+    .valid == false
+      and .state == "unknown"
+      and .invalidity == {kind:"unowned_current",ids:["runaway"]}
+  ' >/dev/null || fail "a live child with no in-flight row stopped being invalid: $out"
+
+  # A terminal child the backlog never records at all is still off the books.
+  mate=$(make_home preserved-mate-ghost)
+  write_preserved_artifact_home "$mate"
+  write_preserved_child "$mate" ghost 'failed: run cancelled'
+  out=$(PATH="$fakebin:$PATH" FM_HOME="$mate" "$SNAPSHOT" --secondmate-home-summary) \
+    || fail "the home summary must succeed on an unrecorded terminal child"
+  printf '%s' "$out" | jq -e '
+    .valid == false
+      and .state == "unknown"
+      and .invalidity == {kind:"unowned_current",ids:["ghost"]}
+  ' >/dev/null || fail "a terminal child with no backlog record stopped being invalid: $out"
+  pass "preserved terminal artifacts stay charted while real terminal contradictions stay invalid"
+}
+
 test_secondmate_summary_budget_excludes_repeated_child_probe_wallclock() {
   local home mate fakebin out i child
   home=$(make_home summary-budget-parent)
@@ -1062,6 +1186,7 @@ test_empty_upstream_read_stops_the_snapshot() {
 
 test_empty_fleet_json
 test_large_inventory_snapshot_survives_argv_limit
+test_preserved_terminal_artifact_stays_charted
 test_secondmate_summary_budget_excludes_repeated_child_probe_wallclock
 test_snapshot_keeps_large_json_off_the_command_line
 test_empty_upstream_read_stops_the_snapshot

@@ -689,10 +689,19 @@ secondmate_home_summary_json() {  # <backlog-json> <tasks-json>
     | ([ $owned_in_flight[]
          | select(.requires_child_metadata)
          | select(.id as $id | [$tasks[].id] | index($id) | not) ]) as $orphan_in_flight
+    # A terminal child only contradicts the inventory when a row still claims a
+    # live worker for it. A finished or cancelled run whose artifact is preserved
+    # unlanded sits under a held in-flight row or a queued row, both of which
+    # already state that nothing is running, so it stays valid and charted; an id
+    # the structured backlog does not record at all remains a real contradiction.
+    | ([ $backlog.records[]? | select(.structured) | .id ]) as $structured_ids
     | ([ $tasks[]
          | select(.id as $id | [$owned_in_flight[].id] | index($id) | not)
+         | select((((.current_state.state == "done") or (.current_state.state == "failed"))
+                   and (.id as $id | ($structured_ids | index($id)) != null)) | not)
          | {id,state:.current_state.state} ]) as $unowned_children
-    | ([ $owned_in_flight[] as $work
+    | ([ $owned_in_flight[]
+         | select(.requires_child_metadata) as $work
          | $tasks[]
          | select(.id == $work.id and (.current_state.state == "done" or .current_state.state == "failed"))
          | {id,state:.current_state.state} ]) as $terminal_in_flight
