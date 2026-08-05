@@ -390,8 +390,7 @@ esac
 # to keep its set -eu and function surface out of this script.
 afk_daemon_owns_watcher() {
   [ -e "$STATE/.afk" ] || return 1
-  # shellcheck source=bin/fm-afk-start.sh
-  ( . "$SCRIPT_DIR/fm-afk-start.sh"; daemon_lock_held_by_live_daemon ) >/dev/null 2>&1
+  bash -c ". \"\$1/fm-afk-start.sh\" && daemon_lock_held_by_live_daemon" afk-daemon-probe "$SCRIPT_DIR" >/dev/null 2>&1
 }
 afk_standby_marker="$STATE/.arm-afk-standby"
 while afk_daemon_owns_watcher; do
