@@ -51,8 +51,8 @@
 #   outside herdr has no workspace to inherit and uses this home's own labeled
 #   workspace, which must then match exactly one. --secondmate is the deliberate
 #   exception: it stands up that secondmate home's own workspace.
-#   Herdr additionally supports a default-off presentation-only layout when the
-#   local config/herdr-presentation-spaces flag exists. A clean fresh task first
+#   Herdr additionally uses a default-on presentation-only layout unless the
+#   local config/herdr-presentation-spaces file says off. A clean fresh task first
 #   writes state/<id>.herdr-presentation atomically, then creates a disposable
 #   workspace containing only the ordinary task pane. A successful clean create
 #   upgrades its attempt journal with exact home, session, workspace, tab, pane,
@@ -209,6 +209,8 @@ SUB_HOME_MARKER=".fm-secondmate-home"
 . "$SCRIPT_DIR/fm-pr-lib.sh"
 # shellcheck source=bin/fm-trace-context-lib.sh
 . "$SCRIPT_DIR/fm-trace-context-lib.sh"
+# shellcheck source=bin/fm-remote-readiness-lib.sh
+. "$SCRIPT_DIR/fm-remote-readiness-lib.sh"
 # Fail closed before any fleet mutation: a no-mistakes gate agent must never spawn
 # a direct report (see bin/fm-gate-refuse-lib.sh).
 fm_refuse_if_gate_agent
@@ -333,7 +335,7 @@ fi
 
 spawn_remote_secondmate() {
   local id=$1 remote host root home harness positional model effort backend out rc meta tmp
-  local remote_backend remote_target remote_harness registry_lock remote_lock remote_generation
+  local remote_backend remote_target remote_harness remote_herdr_session registry_lock remote_lock remote_generation
   local remote_traceparent remote_recorded_traceparent
   local -a launch_args
   id=${POS[0]:-}
@@ -394,7 +396,19 @@ spawn_remote_secondmate() {
       [ -n "$effort" ] || effort=-
     fi
   fi
-  backend=${BACKEND_ARG:--}
+  # A remote second mate always runs on Herdr: its server belongs to the host's
+  # own GUI login session, so the endpoint outlives every SSH connection that
+  # supervises it. bin/fm-remote-doctor.sh gates that host on the same
+  # requirement, and the remote home's config/backend never overrides it.
+  case "${BACKEND_ARG:--}" in
+    -|herdr) backend=herdr ;;
+    *)
+      fm_lock_release "$registry_lock" || true
+      fm_lock_release "$SPAWN_TASK_LOCK" || true
+      echo "error: a remote secondmate runs only on the herdr backend, not '$BACKEND_ARG'" >&2
+      return 1
+      ;;
+  esac
   case "$effort" in
     -|low|medium|high|xhigh|max) ;;
     *)
@@ -416,6 +430,27 @@ spawn_remote_secondmate() {
       echo "error: existing metadata for $id does not identify this remote secondmate route" >&2
       return 1
     fi
+  fi
+  # Gate the host before anything is published or transferred, so a host that
+  # cannot hold a durable Herdr endpoint refuses here rather than half-way
+  # through a launch. This is also the readiness gate every liveness relaunch
+  # passes through, because recovery respawns through this same route.
+  rc=0
+  fm_remote_readiness_ensure "$SCRIPT_DIR" "$id" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    fm_lock_release "$registry_lock" || true
+    fm_lock_release "$SPAWN_TASK_LOCK" || true
+    # Summary first, then the doctor's own text: a caller that reports only the
+    # first line, such as the startup liveness sweep, must still say something
+    # actionable.
+    if [ "$rc" -eq 255 ]; then
+      echo "error: remote secondmate $id readiness could not be confirmed; preserved route $host:$home" >&2
+    else
+      echo "error: remote secondmate $id host $host is not ready for a remote second mate; launch refused" >&2
+    fi
+    [ -z "$FM_REMOTE_READINESS_OUT" ] || printf '%s\n' "$FM_REMOTE_READINESS_OUT" >&2
+    [ "$rc" -ne 255 ] || return 255
+    return 1
   fi
   remote_lock=$(fm_remote_inherit_transaction_lock_path "$STATE" "$id")
   if ! fm_lock_acquire_wait "$remote_lock"; then
@@ -460,7 +495,7 @@ spawn_remote_secondmate() {
   launch_args=("$id" "$harness" "$model" "$effort" "$backend")
   [ -z "$remote_traceparent" ] || launch_args+=("$remote_traceparent")
   if out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh launch \
-    "${launch_args[@]}" 2>&1); then
+    "${launch_args[@]}" < /dev/null 2>&1); then
     rc=0
   else
     rc=$?
@@ -478,13 +513,28 @@ spawn_remote_secondmate() {
   remote_backend=$(printf '%s\n' "$out" | sed -n 's/^backend=//p' | tail -1)
   remote_target=$(printf '%s\n' "$out" | sed -n 's/^target=//p' | tail -1)
   remote_harness=$(printf '%s\n' "$out" | sed -n 's/^harness=//p' | tail -1)
-  [ -n "$remote_backend" ] && [ -n "$remote_target" ] && [ "$remote_harness" = "$harness" ] || {
+  remote_herdr_session=$(printf '%s\n' "$out" | sed -n 's/^herdr_session=//p' | tail -1)
+  if [ "$remote_backend" != herdr ]; then
+    fm_lock_release "$remote_lock" || true
+    fm_lock_release "$registry_lock" || true
+    fm_lock_release "$SPAWN_TASK_LOCK" || true
+    echo "error: remote launch returned backend '${remote_backend:-missing}', expected herdr; preserving the remote route for reconciliation" >&2
+    return 1
+  fi
+  [ -n "$remote_target" ] && [ "$remote_harness" = "$harness" ] || {
     fm_lock_release "$remote_lock" || true
     fm_lock_release "$registry_lock" || true
     fm_lock_release "$SPAWN_TASK_LOCK" || true
     echo "error: remote launch returned malformed route metadata; preserving the remote route for reconciliation" >&2
     return 1
   }
+  if [ "$remote_herdr_session" != fm-remote ] || [ "${remote_target%%:*}" != "$remote_herdr_session" ]; then
+    fm_lock_release "$remote_lock" || true
+    fm_lock_release "$registry_lock" || true
+    fm_lock_release "$SPAWN_TASK_LOCK" || true
+    echo "error: remote launch returned Herdr session '${remote_herdr_session:-missing}', expected 'fm-remote'; preserving the remote route for reconciliation" >&2
+    return 1
+  fi
   # Record what the remote endpoint ACTUALLY carries, read back from its own
   # launch, rather than what this side hoped to deliver. That keeps the #995
   # guarantee that the recorded carrier is the identity the child received even
@@ -511,6 +561,7 @@ spawn_remote_secondmate() {
     echo "remote_host=$host"
     echo "remote_root=$root"
     echo "remote_backend=$remote_backend"
+    echo "remote_herdr_session=$remote_herdr_session"
     echo "remote_target=$remote_target"
     [ -z "$remote_recorded_traceparent" ] || echo "traceparent=$remote_recorded_traceparent"
   } > "$tmp"
@@ -1357,7 +1408,7 @@ case "$BACKEND" in
     fi
     HERDR_PRESENTATION_JOURNAL=$(fm_backend_herdr_projection_journal_path "$STATE" "$ID")
     HERDR_PROJECTED=0
-    if [ "$KIND" != secondmate ] && [ -f "$CONFIG/herdr-presentation-spaces" ]; then
+    if [ "$KIND" != secondmate ] && fm_backend_herdr_presentation_enabled "$CONFIG"; then
       HERDR_SES=$(fm_backend_herdr_session)
       HERDR_PARENT_LABEL=$(FM_HOME="$HERDR_LABEL_HOME" fm_backend_herdr_workspace_label)
       if [ -e "$HERDR_PRESENTATION_JOURNAL" ] || [ -L "$HERDR_PRESENTATION_JOURNAL" ]; then
@@ -2054,6 +2105,10 @@ fi
 if [ "$KIND" = secondmate ]; then
   sq_home=$(shell_quote "$PROJ_ABS")
   sq_primary_home=$(shell_quote "$FM_HOME")
+  case "$HARNESS" in
+    claude) supervision_model=autoarm ;;
+    *) supervision_model=persistent ;;
+  esac
   # Deliver the primary's EFFECTIVE trace-context decision as a normalized on/off
   # literal (never the raw FM_TRACE_CONTEXT string) so a FM_TRACE_CONTEXT override
   # on the primary reaches the secondmate's OWN workers, not just the copied
@@ -2061,7 +2116,7 @@ if [ "$KIND" = secondmate ]; then
   # not enable them across the launch boundary (bin/fm-trace-context-lib.sh header).
   # Reuse the single frozen decision from the carrier resolution above so the
   # injected carrier and this on/off snapshot are guaranteed to agree.
-  LAUNCH="FM_ROOT_OVERRIDE= FM_STATE_OVERRIDE= FM_DATA_OVERRIDE= FM_PROJECTS_OVERRIDE= FM_CONFIG_OVERRIDE= FM_PUBLIC_FOLLOWUP_PRIMARY_HOME=$sq_primary_home FM_HOME=$sq_home FM_TRACE_CONTEXT=$SPAWN_TRACE_EFFECTIVE $LAUNCH"
+  LAUNCH="FM_ROOT_OVERRIDE= FM_STATE_OVERRIDE= FM_DATA_OVERRIDE= FM_PROJECTS_OVERRIDE= FM_CONFIG_OVERRIDE= FM_PUBLIC_FOLLOWUP_PRIMARY_HOME=$sq_primary_home FM_HOME=$sq_home FM_TRACE_CONTEXT=$SPAWN_TRACE_EFFECTIVE FM_SUPERVISION_MODEL=$supervision_model $LAUNCH"
 fi
 # Export GOTMPDIR into the crewmate's pane shell so the agent and every child
 # process (go build, go test, ...) inherit it. Sent before the launch command so

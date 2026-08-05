@@ -164,6 +164,7 @@ family_for_basename() {
       printf '%s\n' real-herdr-gated
       ;;
     fm-backlog-handoff.test.sh|fm-on.test.sh|fm-remote-backlog-handoff.test.sh|\
+    fm-remote-doctor.test.sh|fm-remote-job.test.sh|\
     fm-remote-reply.test.sh|fm-remote-secondmate-lifecycle-e2e.test.sh|\
     fm-remote-secondmate-trace-context.test.sh|\
     fm-secondmate-harness.test.sh|fm-secondmate-lifecycle-e2e.test.sh|\
@@ -899,6 +900,13 @@ families_for_changed_path() {
       ;;
     bin/fm-pr-*|bin/fm-merge-local.sh|bin/fm-teardown.sh|bin/fm-review-diff.sh|\
     bin/fm-x-*|bin/fm-check*)
+      printf '%s\n' pr-forge
+      ;;
+    bin/fm-nm-run-lib.sh)
+      # Shared no-mistakes run-attribution primitives, sourced by both
+      # bin/fm-crew-state.sh (pure-contract-unit) and bin/fm-teardown.sh's
+      # pre-teardown run abort (pr-forge).
+      printf '%s\n' pure-contract-unit
       printf '%s\n' pr-forge
       ;;
     bin/fm-spawn.sh|bin/fm-send.sh|bin/fm-harness.sh|\
