@@ -379,6 +379,26 @@ case "${1:-}" in
   *) echo "usage: $(basename "$0") [--restart]" >&2; exit 2 ;;
 esac
 
+# While away mode is active AND the sub-supervisor daemon holds its lock with a
+# live pid, the daemon owns the watcher (it runs bin/fm-watch.sh as a direct
+# child and never uses this arm path). Arming here would steal the watcher
+# singleton from the daemon, routing every wake back through a full per-wake
+# harness injection and defeating /afk. Stand by quietly - no stdout, since an
+# adapter may treat arm output as a deliverable wake - and resume normal arming
+# the moment the flag clears or the daemon dies, so supervision never lapses on
+# a stale .afk. The liveness check reuses fm-afk-start.sh helpers in a subshell
+# to keep its set -eu and function surface out of this script.
+afk_daemon_owns_watcher() {
+  [ -e "$STATE/.afk" ] || return 1
+  ( . "$SCRIPT_DIR/fm-afk-start.sh"; daemon_lock_held_by_live_daemon ) >/dev/null 2>&1
+}
+afk_standby_marker="$STATE/.arm-afk-standby"
+while afk_daemon_owns_watcher; do
+  [ -e "$afk_standby_marker" ] || date "+%s" > "$afk_standby_marker" 2>/dev/null || true
+  sleep "${FM_ARM_AFK_STANDBY_POLL:-15}"
+done
+rm -f "$afk_standby_marker" 2>/dev/null || true
+
 if [ "$mode" = restart ]; then
   # Home-scoped stop: only the watcher pid recorded in THIS home's lock.
   lock_pid=$(cat "$WATCH_LOCK/pid" 2>/dev/null || true)
