@@ -1088,6 +1088,48 @@ inspectable_git_worktree() {
   git -C "$top" rev-parse --git-dir >/dev/null 2>&1
 }
 
+validate_unique_worktree_binding() {
+  local target_abs meta claim_id claim_wt claim_abs conflicts=""
+  [ -n "$WT" ] && [ -d "$WT" ] || return 0
+  [ "$KIND" != secondmate ] || return 0
+  target_abs=$(canonical_existing_dir "$WT") || {
+    echo "REFUSED: cannot canonicalize worktree $WT before teardown." >&2
+    return 1
+  }
+  for meta in "$STATE"/*.meta; do
+    [ -e "$meta" ] || [ -L "$meta" ] || continue
+    if [ ! -f "$meta" ] || [ -L "$meta" ]; then
+      echo "REFUSED: unsafe task metadata record $meta; preserving task state." >&2
+      return 1
+    fi
+    [ "$meta" != "$META" ] || continue
+    claim_id=${meta##*/}
+    claim_id=${claim_id%.meta}
+    fm_task_id_path_safe "$claim_id" || {
+      echo "REFUSED: unsafe task metadata identity $claim_id; preserving task state." >&2
+      return 1
+    }
+    claim_wt=$(fm_meta_get "$meta" worktree)
+    [ -n "$claim_wt" ] || continue
+    if [ "$claim_wt" = "$WT" ]; then
+      conflicts="${conflicts}${conflicts:+ }$claim_id"
+      continue
+    fi
+    [ -d "$claim_wt" ] || continue
+    claim_abs=$(canonical_existing_dir "$claim_wt") || {
+      echo "REFUSED: cannot canonicalize claimed worktree $claim_wt for $claim_id; preserving task state." >&2
+      return 1
+    }
+    [ "$claim_abs" = "$target_abs" ] || continue
+    conflicts="${conflicts}${conflicts:+ }$claim_id"
+  done
+  [ -z "$conflicts" ] || {
+    echo "REFUSED: worktree $WT is also claimed by task(s): $conflicts." >&2
+    echo "Retire proven stale bindings first with bin/fm-retire-stale-binding.sh; preserving the reused copy." >&2
+    return 1
+  }
+}
+
 canonical_existing_dir() {
   local target=$1
   [ -n "$target" ] || return 1
@@ -2360,6 +2402,10 @@ if [ "$BACKEND" = orca ] && [ "$KIND" != scout ] && [ "$KIND" != secondmate ] &&
   fi
   require_orca_worktree_path_match "$ORCA_WORKTREE_ID" "$WT" || exit 1
   ORCA_PATH_MATCH_VERIFIED=1
+fi
+
+if [ -d "$WT" ] && [ "$KIND" != secondmate ]; then
+  validate_unique_worktree_binding || exit 1
 fi
 
 if [ -d "$WT" ] && [ "$FORCE" != "--force" ]; then
