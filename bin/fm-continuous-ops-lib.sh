@@ -33,6 +33,8 @@ CONFIG="${FM_CONFIG_OVERRIDE:-${CONFIG:-$FM_HOME/config}}"
 . "$FM_CONTINUOUS_OPS_DIR/fm-tasks-axi-lib.sh"
 # shellcheck source=bin/fm-wake-lib.sh
 . "$FM_CONTINUOUS_OPS_DIR/fm-wake-lib.sh"
+# shellcheck source=bin/fm-classify-lib.sh
+. "$FM_CONTINUOUS_OPS_DIR/fm-classify-lib.sh"
 
 FM_CONTINUOUS_OPS_MARKER="${FM_CONTINUOUS_OPS_MARKER:-$STATE/.continuous-ops-ready}"
 FM_CONTINUOUS_OPS_MARKER_LOCK="${FM_CONTINUOUS_OPS_MARKER_LOCK:-$STATE/.continuous-ops-ready.lock}"
@@ -53,7 +55,6 @@ FM_CONTINUOUS_OPS_READY_SIGNATURE=
 FM_CONTINUOUS_OPS_WORKERS=0
 FM_CONTINUOUS_OPS_LOCAL_CERT_ACTIVE=0
 FM_CONTINUOUS_OPS_WORKER_IDLE=false
-FM_CONTINUOUS_OPS_LOCAL_CERT_IDLE=false
 FM_CONTINUOUS_OPS_PAYLOAD=
 
 fm_continuous_ops_github_status_get() {  # <key> [state-dir]
@@ -240,12 +241,59 @@ fm_continuous_ops_state_counts_local_cert() {  # <fm-crew-state line>
   return 0
 }
 
+fm_continuous_ops_status_last_line() {  # <status-log>
+  [ -f "$1" ] && [ ! -L "$1" ] || return 1
+  grep -v '^[[:space:]]*$' "$1" 2>/dev/null | tail -1
+}
+
+fm_continuous_ops_status_proves_inactive_worker() {  # <status-line>
+  local line=$1 verb
+  [ -n "$line" ] || return 1
+  status_is_paused "$line" && return 0
+  verb=$(status_line_verb "$line")
+  case "$verb" in
+    done|failed|blocked|needs-decision|captain-held) return 0 ;;
+  esac
+  return 1
+}
+
+fm_continuous_ops_state_proves_missing_worker() {  # <fm-crew-state line>
+  local line=$1
+  case "$line" in
+    *"worktree gone"*|*"backend target gone"*|*"no metadata for "*|*"no backend target recorded"*|*"unknown missing"*)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+fm_continuous_ops_state_counts_active_worker() {  # <fm-crew-state line> <status-log>
+  local line=$1 status_log=$2 state status_line
+  case "$line" in
+    state:\ working*) return 0 ;;
+    state:\ done*|state:\ blocked*|state:\ paused*|state:\ failed*|state:\ parked*) return 1 ;;
+  esac
+
+  # Unknown current-state evidence is conservative, except when the current read
+  # or the latest event proves historical ownership rather than active work.
+  if fm_continuous_ops_state_proves_missing_worker "$line"; then
+    return 1
+  fi
+  status_line=$(fm_continuous_ops_status_last_line "$status_log" || true)
+  if fm_continuous_ops_status_proves_inactive_worker "$status_line"; then
+    return 1
+  fi
+
+  state=${line#state: }
+  state=${state%% *}
+  [ -z "$line" ] || [ "$state" = unknown ]
+}
+
 fm_continuous_ops_capacity_read() {
-  local meta id kind mode line
+  local meta id kind mode line status_log
   FM_CONTINUOUS_OPS_WORKERS=0
   FM_CONTINUOUS_OPS_LOCAL_CERT_ACTIVE=0
   FM_CONTINUOUS_OPS_WORKER_IDLE=false
-  FM_CONTINUOUS_OPS_LOCAL_CERT_IDLE=false
 
   for meta in "$STATE"/*.meta; do
     [ -f "$meta" ] && [ ! -L "$meta" ] || continue
@@ -253,11 +301,13 @@ fm_continuous_ops_capacity_read() {
     kind=$(fm_continuous_ops_meta_get "$meta" kind)
     [ -n "$kind" ] || kind=ship
     [ "$kind" = secondmate ] && continue
+    id=$(basename "$meta" .meta)
+    status_log="$STATE/$id.status"
+    line=$("$FM_CONTINUOUS_OPS_CREW_STATE_BIN" "$id" 2>/dev/null || true)
+    fm_continuous_ops_state_counts_active_worker "$line" "$status_log" || continue
     FM_CONTINUOUS_OPS_WORKERS=$((FM_CONTINUOUS_OPS_WORKERS + 1))
     mode=$(fm_continuous_ops_meta_get "$meta" mode)
     if [ "$kind" = ship ] && [ "$mode" = no-mistakes ]; then
-      id=$(basename "$meta" .meta)
-      line=$("$FM_CONTINUOUS_OPS_CREW_STATE_BIN" "$id" 2>/dev/null || true)
       if fm_continuous_ops_state_counts_local_cert "$line"; then
         FM_CONTINUOUS_OPS_LOCAL_CERT_ACTIVE=$((FM_CONTINUOUS_OPS_LOCAL_CERT_ACTIVE + 1))
       fi
@@ -266,20 +316,17 @@ fm_continuous_ops_capacity_read() {
 
   [ "$FM_CONTINUOUS_OPS_WORKERS" -lt "$FM_CONTINUOUS_OPS_WORKER_LIMIT" ] \
     && FM_CONTINUOUS_OPS_WORKER_IDLE=true
-  [ "$FM_CONTINUOUS_OPS_LOCAL_CERT_ACTIVE" -lt "$FM_CONTINUOUS_OPS_LOCAL_CERT_LIMIT" ] \
-    && FM_CONTINUOUS_OPS_LOCAL_CERT_IDLE=true
 }
 
 fm_continuous_ops_capacity_idle() {
-  [ "$FM_CONTINUOUS_OPS_WORKER_IDLE" = true ] \
-    || [ "$FM_CONTINUOUS_OPS_LOCAL_CERT_IDLE" = true ]
+  [ "$FM_CONTINUOUS_OPS_WORKER_IDLE" = true ]
 }
 
 fm_continuous_ops_payload() {
   local ids
   ids=$(fm_continuous_ops_join_ids "$FM_CONTINUOUS_OPS_READY_IDS" 5)
   [ -n "$ids" ] || ids="ready set"
-  printf 'continuous-ops: approved ready work exists (%s item(s): %s); idle capacity workers=%s/%s local-cert=%s/%s; select and dispatch the next eligible work under existing project, secondmate, delivery-mode, profile, and authority contracts, or record the concrete blocker' \
+  printf 'continuous-ops: approved ready work exists (%s item(s): %s); active workers=%s/%s local certification=%s/%s; select and dispatch the next eligible work under existing project, secondmate, delivery-mode, profile, and authority contracts, or record the concrete blocker' \
     "$FM_CONTINUOUS_OPS_READY_COUNT" \
     "$ids" \
     "$FM_CONTINUOUS_OPS_WORKERS" \
@@ -307,8 +354,8 @@ fm_continuous_ops_write_marker() {  # <reason>
     printf 'ready_signature=%s\n' "$FM_CONTINUOUS_OPS_READY_SIGNATURE"
     printf 'ready_count=%s\n' "$FM_CONTINUOUS_OPS_READY_COUNT"
     printf 'ready_items=%s\n' "$ids"
-    printf 'ordinary_workers=%s\n' "$FM_CONTINUOUS_OPS_WORKERS"
-    printf 'ordinary_worker_limit=%s\n' "$FM_CONTINUOUS_OPS_WORKER_LIMIT"
+    printf 'active_workers=%s\n' "$FM_CONTINUOUS_OPS_WORKERS"
+    printf 'active_worker_limit=%s\n' "$FM_CONTINUOUS_OPS_WORKER_LIMIT"
     printf 'local_cert_active=%s\n' "$FM_CONTINUOUS_OPS_LOCAL_CERT_ACTIVE"
     printf 'local_cert_limit=%s\n' "$FM_CONTINUOUS_OPS_LOCAL_CERT_LIMIT"
     printf 'payload=%s\n' "$FM_CONTINUOUS_OPS_PAYLOAD"
@@ -377,6 +424,7 @@ fm_continuous_ops_reconcile_existing() {
 
 fm_continuous_ops_print_section() {
   local count items workers worker_limit cert cert_limit payload gh_state gh_reason gh_ready gh_unknown gh_ledger
+  local worker_has_capacity=unknown
   if ! fm_continuous_ops_marker_exists "$STATE"; then
     gh_state=$(fm_continuous_ops_github_status_get state "$STATE")
     case "$gh_state" in
@@ -398,19 +446,42 @@ fm_continuous_ops_print_section() {
   fi
   count=$(fm_continuous_ops_marker_get ready_count)
   items=$(fm_continuous_ops_marker_get ready_items)
-  workers=$(fm_continuous_ops_marker_get ordinary_workers)
-  worker_limit=$(fm_continuous_ops_marker_get ordinary_worker_limit)
+  workers=$(fm_continuous_ops_marker_get active_workers)
+  [ -n "$workers" ] || workers=$(fm_continuous_ops_marker_get ordinary_workers)
+  worker_limit=$(fm_continuous_ops_marker_get active_worker_limit)
+  [ -n "$worker_limit" ] || worker_limit=$(fm_continuous_ops_marker_get ordinary_worker_limit)
   cert=$(fm_continuous_ops_marker_get local_cert_active)
   cert_limit=$(fm_continuous_ops_marker_get local_cert_limit)
   payload=$(fm_continuous_ops_marker_get payload)
-  printf 'CONTINUOUS OPS (ready backlog work + idle capacity):\n'
+  case "$workers:$worker_limit" in
+    *[!0-9]*:*) ;;
+    *:*[!0-9]*) ;;
+    *:|:*) ;;
+    *)
+      if [ "$workers" -lt "$worker_limit" ]; then
+        worker_has_capacity=true
+      else
+        worker_has_capacity=false
+      fi
+      ;;
+  esac
+  case "$payload" in
+    *"idle capacity workers="*)
+      payload=$(printf 'continuous-ops: approved ready work exists (%s item(s): %s); active workers=%s/%s local certification=%s/%s; select and dispatch the next eligible work under existing project, secondmate, delivery-mode, profile, and authority contracts, or record the concrete blocker' \
+        "${count:-unknown}" "${items:-ready set}" "${workers:-unknown}" "${worker_limit:-$FM_CONTINUOUS_OPS_WORKER_LIMIT}" \
+        "${cert:-unknown}" "${cert_limit:-$FM_CONTINUOUS_OPS_LOCAL_CERT_LIMIT}")
+      ;;
+  esac
+  printf 'CONTINUOUS OPS (ready backlog work + active-worker capacity):\n'
   printf 'ready: %s item(s)' "${count:-unknown}"
   [ -n "$items" ] && printf ' (%s)' "$items"
   printf '\n'
-  printf 'capacity: ordinary workers %s/%s, local certification %s/%s\n' \
+  printf 'capacity: active workers %s/%s, local certification %s/%s\n' \
     "${workers:-unknown}" "${worker_limit:-$FM_CONTINUOUS_OPS_WORKER_LIMIT}" \
     "${cert:-unknown}" "${cert_limit:-$FM_CONTINUOUS_OPS_LOCAL_CERT_LIMIT}"
-  if [ -n "$payload" ]; then
+  if [ "$worker_has_capacity" = false ]; then
+    printf 'action: no dispatch request; active worker limit is full until a refresh proves a worker slot is open.\n'
+  elif [ -n "$payload" ]; then
     printf 'action: %s\n' "$payload"
   else
     printf 'action: select and dispatch the next eligible ready work, or record the concrete blocker.\n'
