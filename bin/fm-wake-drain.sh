@@ -10,6 +10,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/fm-classify-lib.sh"
 # shellcheck source=bin/fm-line-cap-lib.sh
 . "$SCRIPT_DIR/fm-line-cap-lib.sh"
+# shellcheck source=bin/fm-continuous-ops-lib.sh
+. "$SCRIPT_DIR/fm-continuous-ops-lib.sh"
 
 DRAIN_TMP=
 DRAIN_LOCK_HELD=false
@@ -86,6 +88,11 @@ EOF
   printf "OPEN DECISIONS: close one by answering it: bin/fm-send.sh <task> --resolve-key <key> '<answer>'\n"
 }
 
+print_continuous_ops_section() {
+  fm_continuous_ops_refresh_quiet "wake-drain" || true
+  fm_continuous_ops_print_section || true
+}
+
 # shellcheck disable=SC2317,SC2329 # Invoked by trap handlers below.
 cleanup() {
   local status=$?
@@ -109,6 +116,7 @@ if [ ! -s "$FM_WAKE_QUEUE" ]; then
   : > "$FM_WAKE_QUEUE"
   fm_lock_release "$FM_WAKE_QUEUE_LOCK"
   DRAIN_LOCK_HELD=false
+  (print_continuous_ops_section) || true
   (print_open_decisions_section) || true
   assert_watcher_liveness
   exit 0
@@ -138,6 +146,7 @@ DRAIN_LOCK_HELD=false
 # Raw output and queue deletion are authoritative. Everything below is
 # best-effort and cannot restore, duplicate, hide, or fail the consumed rows.
 (fm_wake_print_annotations "$RAW_ROWS") || true
+(print_continuous_ops_section) || true
 (print_open_decisions_section) || true
 assert_watcher_liveness
 exit 0

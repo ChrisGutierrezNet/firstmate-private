@@ -853,6 +853,49 @@ write_large_inventory_fixture() {  # <home> <mate-home>
   printf '%s %s\n' "$queued" "$done_rows"
 }
 
+write_large_secondmate_summary_fixture() {  # <parent-home> <mate-home>
+  local home=$1 mate=$2 queued=45 done_rows=30 i pad
+  pad="carrying delegated-home inventory detail large enough to cross the guarded jq argument ceiling"
+  mkdir -p "$mate/data" "$mate/state" "$mate/config" "$mate/projects/active-child" "$mate/bin"
+  printf '# Firstmate\n' > "$mate/AGENTS.md"
+  printf 'delegate-large\n' > "$mate/.fm-secondmate-home"
+  {
+    printf '## In flight\n'
+    printf -- '- [ ] active-child - Active delegated child %s (repo: alpha) (kind: ship) (since 2026-07-11)\n' "$pad"
+    printf '\n## Queued\n'
+    i=1
+    while [ "$i" -le "$queued" ]; do
+      printf -- '- [ ] delegated-queued-%03d - Delegated queued item %03d %s (repo: alpha) (kind: ship) (priority: 2) (since 2026-07-11)\n' \
+        "$i" "$i" "$pad"
+      i=$((i + 1))
+    done
+    printf '\n## Done\n'
+    i=1
+    while [ "$i" -le "$done_rows" ]; do
+      printf -- '- [x] delegated-done-%03d - Delegated done item %03d %s https://github.com/kunchenguid/firstmate/pull/%d (repo: alpha) (kind: ship) (merged 2026-07-10)\n' \
+        "$i" "$i" "$pad" "$i"
+      i=$((i + 1))
+    done
+  } > "$mate/data/backlog.md"
+  fm_write_meta "$mate/state/active-child.meta" \
+    "window=firstmate:fm-active-child" \
+    "worktree=$mate/projects/active-child" \
+    "project=alpha" "harness=claude" "kind=ship" "mode=ship" "yolo=off"
+  printf 'working: active delegated child\n' > "$mate/state/active-child.status"
+  record_claude_busy "$mate/state" active-child
+
+  printf '## In flight\n\n## Queued\n\n## Done\n' > "$home/data/backlog.md"
+  printf -- '- delegate-large - delegated scope (home: %s; scope: delegated scope; projects: alpha; added 2026-07-11)\n' \
+    "$mate" > "$home/data/secondmates.md"
+  fm_write_meta "$home/state/delegate-large.meta" \
+    "window=firstmate:fm-delegate-large" \
+    "worktree=$mate" "project=$mate" "harness=codex" \
+    "kind=secondmate" "mode=secondmate" "yolo=off" \
+    "home=$mate" "projects=alpha"
+  printf 'working: watching delegated scope\n' > "$home/state/delegate-large.status"
+  printf '%s %s\n' "$queued" "$done_rows"
+}
+
 test_large_inventory_snapshot_survives_argv_limit() {
   local home mate fakebin out rows queued done_rows backlog_bytes records expected
   home=$(make_home large-inventory)
@@ -1156,6 +1199,39 @@ test_snapshot_keeps_large_json_off_the_command_line() {
   pass "no snapshot jq call carries fleet JSON as a command-line argument"
 }
 
+test_parent_snapshot_keeps_large_secondmate_summary_off_the_command_line() {
+  local home mate fakebin guard real_jq out rc rows queued done_rows record_bytes
+  home=$(make_home child-summary-guard)
+  mate=$(make_home child-summary-guard-mate)
+  rows=$(write_large_secondmate_summary_fixture "$home" "$mate")
+  queued=${rows% *}
+  done_rows=${rows#* }
+  fakebin=$(make_fakebin "$home")
+  guard=$(make_jq_argv_guard "$home")
+  real_jq=$(command -v jq) || fail "jq not found"
+
+  out=$(PATH="$guard:$fakebin:$PATH" FM_TEST_JQ_ARGV_MAX=8192 FM_TEST_REAL_JQ="$real_jq" \
+    FM_HOME="$home" FM_SNAPSHOT_SECONDMATE_QUEUED=40 FM_SNAPSHOT_SECONDMATE_LANDED_PER_HOME=25 \
+    "$SNAPSHOT" --json 2>&1)
+  rc=$?
+  [ "$rc" -eq 0 ] \
+    || fail "parent snapshot passed a delegated-home summary on the command line (rc=$rc): $(printf '%s' "$out" | tail -3)"
+  record_bytes=$(printf '%s' "$out" | jq '.secondmate_current.records[0] | tojson | length')
+  [ "$record_bytes" -gt 8192 ] \
+    || fail "delegated summary fixture is only $record_bytes bytes; it must exceed the argv guard limit"
+  printf '%s' "$out" | jq -e --argjson queued "$queued" --argjson done_rows "$done_rows" '
+    .secondmate_current.records[] | select(.id == "delegate-large")
+    | .provenance.selected == "structured-home"
+      and .current.state == "active_child_work"
+      and .counts.active_children == 1
+      and .counts.queued == $queued
+      and .counts.landed == $done_rows
+      and (.queued | length) == 40
+      and (.landed | length) == 25
+  ' >/dev/null || fail "large delegated-home summary lost structured inventory: $out"
+  pass "parent snapshot keeps large delegated-home summaries off the command line"
+}
+
 # A jq that answers the backlog parse (jq -Rn over data/backlog.md) with no
 # output and a success status, standing in for an upstream JSON read that yields
 # nothing.
@@ -1203,6 +1279,7 @@ test_large_inventory_snapshot_survives_argv_limit
 test_preserved_terminal_artifact_stays_charted
 test_secondmate_summary_budget_excludes_repeated_child_probe_wallclock
 test_snapshot_keeps_large_json_off_the_command_line
+test_parent_snapshot_keeps_large_secondmate_summary_off_the_command_line
 test_empty_upstream_read_stops_the_snapshot
 test_fixture_snapshot_json
 test_main_inventory_orphan_and_unstructured_disclosure

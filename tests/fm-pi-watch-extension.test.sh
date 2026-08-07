@@ -1296,12 +1296,14 @@ EOF
 }
 
 test_opencode_primary_watch_plugin_requires_session_lock() {
-  local plugin repo home log out status
+  local plugin repo home log fakebin ps_delay out status
   plugin="$ROOT/.opencode/plugins/fm-primary-watch-arm.js"
   repo="$TMP_ROOT/opencode-lock-root"
   home="$TMP_ROOT/opencode-lock-home"
   log="$TMP_ROOT/opencode-lock.log"
-  mkdir -p "$repo/bin" "$home/state" "$home/config"
+  fakebin="$TMP_ROOT/opencode-lock-fakebin"
+  ps_delay="$TMP_ROOT/opencode-lock-ps-delay"
+  mkdir -p "$repo/bin" "$home/state" "$home/config" "$fakebin"
   git init -q "$repo"
   : > "$repo/AGENTS.md"
   : > "$home/state/task.meta"
@@ -1311,7 +1313,16 @@ printf 'arm\n' >> "${FM_ARM_LOG:?}"
 printf 'watcher: healthy pid=1 (beacon 0s)\n'
 SH
   chmod +x "$repo/bin/fm-watch-arm.sh"
-  out=$(PLUGIN="$plugin" WORKTREE="$repo" FM_HOME="$home" FM_ARM_LOG="$log" node 2>&1 <<'EOF'
+  cat > "$fakebin/ps" <<'SH'
+#!/usr/bin/env bash
+if [ ! -e "${FM_PS_DELAY_DONE:?}" ]; then
+  : > "$FM_PS_DELAY_DONE"
+  sleep 0.3
+fi
+printf '1\n'
+SH
+  chmod +x "$fakebin/ps"
+  out=$(PATH="$fakebin:$PATH" PLUGIN="$plugin" WORKTREE="$repo" FM_HOME="$home" FM_ARM_LOG="$log" FM_PS_DELAY_DONE="$ps_delay" node 2>&1 <<'EOF'
 import { existsSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
@@ -1325,6 +1336,8 @@ const hooks = await mod.FmPrimaryWatchArm({
 const event = { event: { type: "session.idle", properties: { sessionID: "session-test" } } };
 writeFileSync(`${process.env.FM_HOME}/state/.lock`, "999999\n");
 await hooks.event(event);
+// The fake ps keeps the first read-only lock check in flight long enough for
+// the second event to prove it does not inherit that stale no-arm result.
 await new Promise((resolve) => setTimeout(resolve, 120));
 if (existsSync(process.env.FM_ARM_LOG)) {
   console.error("watch arm ran without owning the session lock");

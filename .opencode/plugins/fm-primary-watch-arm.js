@@ -391,18 +391,28 @@ function armAttempt(status, armChild, includeArmChild) {
   return includeArmChild ? { status, armChild } : status;
 }
 
-async function ensureArm(paths, sessionID, client, predecessorArmPid = "", includeArmChild = false) {
-  let launchResult = null;
+async function beginArmSingleFlight(paths, sessionID, client, predecessorArmPid) {
   if (!launchInFlight) {
     const launch = beginArm(paths, sessionID, client, predecessorArmPid);
     launchInFlight = launch;
     try {
-      launchResult = await launch;
+      return { result: await launch, reused: false };
     } finally {
       if (launchInFlight === launch) launchInFlight = null;
     }
-  } else {
-    launchResult = await launchInFlight;
+  }
+  return { result: await launchInFlight, reused: true };
+}
+
+function shouldRetryReusedNoArmResult(launchResult) {
+  if (launchResult.armChild || child || retryTimer) return false;
+  return ["read-only", "not-needed"].includes(launchResult.status);
+}
+
+async function ensureArm(paths, sessionID, client, predecessorArmPid = "", includeArmChild = false) {
+  let { result: launchResult, reused } = await beginArmSingleFlight(paths, sessionID, client, predecessorArmPid);
+  if (reused && shouldRetryReusedNoArmResult(launchResult)) {
+    launchResult = (await beginArmSingleFlight(paths, sessionID, client, predecessorArmPid)).result;
   }
   const armChild = launchResult.armChild;
   if (!armChild) {

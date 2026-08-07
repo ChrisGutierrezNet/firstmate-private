@@ -247,13 +247,28 @@ C_CHILD_STABLE=0
 while [ "$C_CHILD_ATTEMPT" -lt 100 ]; do
   C_SHELL_PID=$(lab pane process-info --pane "$C_DOOMED_PANE" 2>/dev/null \
     | jq -r '.result.process_info.shell_pid // empty' 2>/dev/null) || C_SHELL_PID=
-  if [ -n "$C_SHELL_PID" ] && ps -axo ppid=,comm= | awk -v parent="$C_SHELL_PID" '
-    $1 == parent {
-      command = $2
+  if [ -n "$C_SHELL_PID" ] && ps -axo pid=,ppid=,comm= | awk -v parent="$C_SHELL_PID" '
+    {
+      pid = $1
+      ppid[pid] = $2
+      command = $3
       sub(/^.*\//, "", command)
-      if (command == "sleep") found = 1
+      name[pid] = command
     }
-    END { exit(found ? 0 : 1) }
+    END {
+      for (pid in ppid) {
+        if (name[pid] != "sleep") continue
+        current = pid
+        depth = 0
+        while ((current in ppid) && depth < 100) {
+          if (ppid[current] == parent) found = 1
+          if (current == ppid[current]) break
+          current = ppid[current]
+          depth++
+        }
+      }
+      exit(found ? 0 : 1)
+    }
   '; then
     C_CHILD_STABLE=$((C_CHILD_STABLE + 1))
     [ "$C_CHILD_STABLE" -ge 2 ] && break

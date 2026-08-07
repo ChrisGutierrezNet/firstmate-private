@@ -263,6 +263,8 @@ PRIMARY_HARNESS=$("$SCRIPT_DIR/fm-harness.sh" 2>/dev/null || printf unknown)
 . "$SCRIPT_DIR/fm-trace-context-lib.sh"
 # shellcheck source=bin/fm-line-cap-lib.sh
 . "$SCRIPT_DIR/fm-line-cap-lib.sh"
+# shellcheck source=bin/fm-continuous-ops-lib.sh
+. "$SCRIPT_DIR/fm-continuous-ops-lib.sh"
 
 STATUS_TAIL=${FM_SESSION_START_STATUS_TAIL:-5}
 case "$STATUS_TAIL" in ''|*[!0-9]*) STATUS_TAIL=5 ;; esac
@@ -619,6 +621,11 @@ EOF
 stage fleet-state
 section "FLEET STATE"
 print_backlog_compact "$DATA/backlog.md" "data/backlog.md"
+
+subsection "Continuous operations"
+if ! fm_continuous_ops_print_section; then
+  printf '(none)\n'
+fi
 
 subsection "Work under way (state/*.meta)"
 META_FOUND=0

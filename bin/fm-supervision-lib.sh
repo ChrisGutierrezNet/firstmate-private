@@ -2,9 +2,11 @@
 # Shared "supervision missing" predicate.
 # Usage: . bin/fm-supervision-lib.sh
 #
-# Reports whether a firstmate home needs supervision because it has in-flight
-# work (a state/<id>.meta exists) or an X-mode relay poll
-# (state/x-watch.check.sh), and whether its watcher has a fresh liveness beacon
+# Reports whether a firstmate home needs supervision because it has effective
+# in-flight work (a state/<id>.meta exists after stale reused-worktree duplicate
+# filtering), an X-mode relay poll
+# (state/x-watch.check.sh), a registered event source, or a Continuous
+# Operations ready-work marker, and whether its watcher has a fresh liveness beacon
 # (state/.last-watcher-beat, touched every poll cycle, within the grace window).
 # bin/fm-turnend-guard.sh uses the PID-strict fm_watcher_healthy from
 # bin/fm-wake-lib.sh for its block decision. bin/fm-guard.sh uses the model-aware
@@ -15,6 +17,9 @@
 # beacon-age details used in their messages.
 
 # Portable mtime; Linux stat lacks -f, macOS stat lacks -c.
+# shellcheck source=bin/fm-continuous-ops-lib.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fm-continuous-ops-lib.sh"
+
 fm_sup_stat_mtime() {
   if [ "$(uname)" = Darwin ]; then
     stat -f %m "$1" 2>/dev/null
@@ -25,11 +30,13 @@ fm_sup_stat_mtime() {
 
 # fm_supervision_status <state-dir> [grace-seconds]
 # Populates, for the state dir at $1:
-#   FM_SUP_IN_FLIGHT      count of state/*.meta (in-flight tasks)
+#   FM_SUP_IN_FLIGHT      count of effective state/*.meta rows (in-flight tasks)
 #   FM_SUP_SOURCES        count of registered process-to-event sources
+#   FM_SUP_CONTINUOUS_OPS count of durable ready-work markers needing action
 #   FM_SUP_NEEDED         true/false - in-flight work, an X-mode relay poll, or a
 #                         registered event source (a source is a wait on an
-#                         external process, not a task, so it has no metadata)
+#                         external process, not a task, so it has no metadata),
+#                         or a continuous-ops ready-work marker
 #   FM_SUP_WATCHER_FRESH  true/false - a watcher beacon within the grace window
 #   FM_SUP_BEACON_DESC    human-readable beacon age, for banners ("never" if absent)
 #   FM_SUP_QUEUE_PENDING  true/false - state/.wake-queue has unread records
@@ -38,6 +45,7 @@ fm_sup_stat_mtime() {
 fm_supervision_status() {
   local state=$1 grace=${2:-${FM_GUARD_GRACE:-300}} meta source beat m age
   FM_SUP_IN_FLIGHT=0
+  FM_SUP_CONTINUOUS_OPS=0
   FM_SUP_NEEDED=false
   FM_SUP_WATCHER_FRESH=false
   FM_SUP_BEACON_DESC=never
@@ -45,6 +53,7 @@ fm_supervision_status() {
 
   for meta in "$state"/*.meta; do
     [ -e "$meta" ] || continue
+    fm_continuous_ops_meta_is_stale_reused_worktree "$meta" "$state" && continue
     FM_SUP_IN_FLIGHT=$((FM_SUP_IN_FLIGHT + 1))
   done
   FM_SUP_SOURCES=0
@@ -52,9 +61,13 @@ fm_supervision_status() {
     [ -e "$source" ] || continue
     FM_SUP_SOURCES=$((FM_SUP_SOURCES + 1))
   done
+  if fm_continuous_ops_marker_exists "$state"; then
+    FM_SUP_CONTINUOUS_OPS=1
+  fi
   if [ "$FM_SUP_IN_FLIGHT" -gt 0 ] \
     || [ -f "$state/x-watch.check.sh" ] \
-    || [ "$FM_SUP_SOURCES" -gt 0 ]; then
+    || [ "$FM_SUP_SOURCES" -gt 0 ] \
+    || [ "$FM_SUP_CONTINUOUS_OPS" -gt 0 ]; then
     FM_SUP_NEEDED=true
   fi
 

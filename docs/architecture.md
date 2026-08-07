@@ -229,6 +229,13 @@ The helper requires a full `https://github.com/<owner>/<repo>/pull/<n>` URL, inv
 Teardown is fail-closed for ship worktrees: dirty worktrees refuse, and committed work must be landed before the worktree is returned.
 [`bin/fm-teardown.sh`](../bin/fm-teardown.sh)'s header owns the landed-work proofs, PR-discovery fallback, and stale-lock recovery procedure.
 
+## Continuous operations
+
+`bin/fm-continuous-ops-lib.sh` owns the minimal continuous-pull mechanism after cleanup.
+It asks the selected compatible `tasks-axi` backend for `ready` work, counts home-local capacity from durable task metadata and current-code-matched no-mistakes state, then writes or clears one private marker under `state/`.
+The marker queues one deduplicated `check` wake when the ready set newly needs action, and the existing supervision predicate treats that marker like other work requiring a live cycle.
+It does not choose the next item, route to a project or secondmate, decide delivery mode, select dispatch profiles, merge, deploy, or bypass any authority boundary.
+
 ## Optional Relay
 
 Relay is opt-in presence for the shared `@myfirstmate` bot on both public surfaces it supports, X and Discord.
