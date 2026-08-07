@@ -53,6 +53,9 @@
 #                          running a check or removing poll artifacts
 #   heartbeat              fleet-scan backstop found an unsurfaced captain-relevant
 #                          status, unless afk is active
+#   reminder: <summary>    recurring captain-action blocker reminder from the
+#                          local fleet snapshot, bounded by its own dedupe state
+#                          and active-hours cadence
 # For normal supervision, resume the session-start primary-harness protocol
 # after each printed reason. Direct duplicate invocations of this script still
 # no-op through the watcher singleton lock.
@@ -113,6 +116,7 @@ HEARTBEAT=${FM_HEARTBEAT:-600}        # base seconds between heartbeat scans
 HEARTBEAT_MAX=${FM_HEARTBEAT_MAX:-7200}  # heartbeat backoff cap
 CHECK_INTERVAL=${FM_CHECK_INTERVAL:-300}  # seconds between *.check.sh sweeps
 CHECK_TIMEOUT=${FM_CHECK_TIMEOUT:-30}     # seconds allowed per *.check.sh
+REMINDER_INTERVAL=${FM_CAPTAIN_REMINDER_SCAN_INTERVAL:-$CHECK_INTERVAL}
 SIGNAL_GRACE=${FM_SIGNAL_GRACE:-30}   # seconds to linger after a signal so trailing
                                       # signals (a status write, then the same turn's
                                       # turn-end hook) coalesce into one wake
@@ -164,6 +168,9 @@ PAUSE_RESURFACE_SECS=${FM_PAUSE_RESURFACE_SECS:-$FM_PAUSE_RESURFACE_SECS_DEFAULT
 # 5c trigger 3: proven-unreliable-at-runtime). A watcher restart re-probes
 # capability, so a transient herdr hiccup self-heals on the next cycle chain.
 EVENT_CAP_FAIL_MAX=${FM_EVENT_CAP_FAIL_MAX:-3}
+case "$REMINDER_INTERVAL" in
+  ''|*[!0-9]*) REMINDER_INTERVAL=$CHECK_INTERVAL ;;
+esac
 # Per-process memo for the push-capability probe (fm_backend_events_capable runs
 # a ~220KB `herdr api schema` read, too heavy to repeat every poll). Keyed by
 # "<backend>:<session>"; re-probed only when that key changes.
@@ -793,6 +800,26 @@ while :; do
   # Then deliver any queued-but-unsurfaced result, including one a runner
   # published while this watcher was between cycles.
   procevent_surface_queued
+
+  # Recurring captain-action blocker reminders. The helper reads only the
+  # canonical local fleet snapshot and owns its own active-hours/cadence dedupe
+  # state, while this watcher remains the single home-scoped delivery path.
+  if [ "$(age_of "$STATE/.last-captain-reminder-scan")" -ge "$REMINDER_INTERVAL" ]; then
+    reminder_out=$("$SCRIPT_DIR/fm-captain-blocker-reminders.sh" 2>/dev/null)
+    reminder_rc=$?
+    touch "$STATE/.last-captain-reminder-scan"
+    if [ "$reminder_rc" -ne 0 ]; then
+      reason="reminder: Captain action reminder scan needs local state repair before it can continue."
+      fm_wake_append reminder captain-blockers "$reason" || exit 1
+      wake "$reason"
+    fi
+    if [ -n "$reminder_out" ]; then
+      reminder_joined=$(printf '%s\n' "$reminder_out" | awk 'NR == 1 { printf "%s", $0; next } { printf " | %s", $0 }')
+      reason="reminder: $reminder_joined"
+      fm_wake_append reminder captain-blockers "$reason" || exit 1
+      wake "$reason"
+    fi
+  fi
 
   # Slow per-task checks (firstmate writes these, e.g. a merged-PR poll).
   # Time-based via .last-check mtime so the cadence survives watcher restarts.
