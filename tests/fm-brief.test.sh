@@ -189,6 +189,27 @@ write_registry() {
 EOF
 }
 
+write_pr_writing_contract() {
+  local home=$1
+  mkdir -p "$home/config"
+  cat > "$home/config/pr-writing-contract.md" <<'EOF'
+# Fixture PR rule
+
+- Use the fixture title form.
+- Keep the authored body focused on reviewer outcome.
+
+```md
+Fenced Markdown must survive.
+```
+EOF
+}
+
+fixed_count() {
+  local needle=$1 file=$2 count
+  count=$(grep -F -c -- "$needle" "$file" 2>/dev/null || true)
+  printf '%s\n' "$count"
+}
+
 # fm-brief.sh must exit 0 and produce a brief with no unreplaced shell
 # metacharacter corruption for every ship delivery mode. This also guards
 # against any *new* unescaped apostrophe or unbalanced quote later added to
@@ -215,6 +236,103 @@ test_ship_modes_generate_clean_briefs() {
     assert_no_grep "EOF" "$brief" "$id: brief leaked a heredoc EOF marker (unterminated heredoc)"
   done
   pass "fm-brief.sh: no-mistakes/direct-PR/local-only briefs generate cleanly"
+}
+
+test_pr_writing_contract_absent_and_empty_preserve_ship_behavior() {
+  local home brief
+  home="$TMP_ROOT/pr-writing-absent-empty-home"
+  mkdir -p "$home/data" "$home/config"
+
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" pr-writing-absent direct-proj --mode direct-PR >/dev/null 2>&1 \
+    || fail "absent PR writing contract should not block direct-PR scaffold"
+  brief="$home/data/pr-writing-absent/brief.md"
+  assert_no_grep "# PR writing contract" "$brief" \
+    "absent PR writing contract should not render a ship section"
+  assert_grep "When it is implemented and committed, push your branch and open a PR with \`gh-axi\`, then append \`done: PR {url}\` to the status file and stop." "$brief" \
+    "absent PR writing contract should preserve direct-PR done wording"
+
+  printf '\n\t\n' > "$home/config/pr-writing-contract.md"
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" pr-writing-empty some-proj --mode no-mistakes >/dev/null 2>&1 \
+    || fail "empty PR writing contract should not block no-mistakes scaffold"
+  brief="$home/data/pr-writing-empty/brief.md"
+  assert_no_grep "# PR writing contract" "$brief" \
+    "blank PR writing contract should not render a ship section"
+  assert_grep "After /no-mistakes reports CI green (the CI-ready return point - do not wait for it to keep monitoring in the background until merge), append \`done: PR {url} checks green\` and stop. You are finished." "$brief" \
+    "blank PR writing contract should preserve no-mistakes done wording"
+  pass "fm-brief.sh: absent or empty PR writing contract preserves existing ship behavior"
+}
+
+test_pr_writing_contract_renders_once_for_every_ship_mode() {
+  local home id mode brief section_count contract_count
+  home="$TMP_ROOT/pr-writing-present-home"
+  mkdir -p "$home/data"
+  write_pr_writing_contract "$home"
+
+  for id_mode in "pr-writing-nm:no-mistakes" "pr-writing-direct:direct-PR" "pr-writing-local:local-only"; do
+    id=${id_mode%%:*}
+    mode=${id_mode##*:}
+    FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj --mode "$mode" >/dev/null 2>&1 \
+      || fail "active PR writing contract should not block $mode scaffold"
+    brief="$home/data/$id/brief.md"
+    section_count=$(fixed_count "# PR writing contract" "$brief")
+    [ "$section_count" = 1 ] || fail "$mode brief should render the PR writing section once, got $section_count"
+    contract_count=$(fixed_count "# Fixture PR rule" "$brief")
+    [ "$contract_count" = 1 ] || fail "$mode brief should embed the contract text once, got $contract_count"
+    assert_grep "authoritative final PR title/body contract" "$brief" \
+      "$mode brief did not mark the local text as authoritative"
+    assert_grep "Fenced Markdown must survive." "$brief" \
+      "$mode brief did not carry Markdown/plain text from the config file"
+    assert_grep "After the last automated PR title or body write for this task, read the live GitHub PR title and body with \`gh-axi\`." "$brief" \
+      "$mode brief did not require live GitHub verification after the last automated PR-body write"
+    assert_grep "If this task never creates or updates a GitHub PR, there is no live GitHub PR text to verify." "$brief" \
+      "$mode brief did not bound the contract for local-only or promoted work"
+    grep -qx "Delivery contract: mode=$mode" "$brief" \
+      || fail "$mode brief lost its delivery contract line"
+  done
+  brief="$home/data/pr-writing-nm/brief.md"
+  assert_grep "do not edit code, commits, or the PR title/body while a No Mistakes run is active" "$brief" \
+    "no-mistakes brief did not forbid code or PR text edits during an active run"
+  assert_grep "Wait until /no-mistakes reports CI green and returns branch ownership before changing PR text." "$brief" \
+    "no-mistakes brief did not wait for branch ownership before PR text edits"
+  assert_grep "you may rewrite only the live GitHub PR title and body to satisfy the contract" "$brief" \
+    "no-mistakes brief did not limit the final post-pipeline edit to title/body"
+  assert_grep "verify the active PR writing contract against the live GitHub title/body" "$brief" \
+    "no-mistakes brief did not require final live title/body verification before done"
+
+  brief="$home/data/pr-writing-direct/brief.md"
+  assert_grep "After the PR is open and every automated PR title/body write is complete" "$brief" \
+    "direct-PR brief did not place the contract after PR creation"
+  assert_grep "Verify the live GitHub title and body with \`gh-axi\` before appending \`done: PR {url}\`" "$brief" \
+    "direct-PR brief did not require live title/body verification before done"
+  pass "fm-brief.sh: active PR writing contract renders once for every ship mode"
+}
+
+test_pr_writing_contract_is_ship_only() {
+  local home scout charter
+  home="$TMP_ROOT/pr-writing-scope-home"
+  mkdir -p "$home/data"
+  write_pr_writing_contract "$home"
+
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" pr-writing-scout alpha --scout >/dev/null 2>&1 \
+    || fail "active PR writing contract should not block scout scaffold"
+  scout="$home/data/pr-writing-scout/brief.md"
+  assert_no_grep "# PR writing contract" "$scout" \
+    "scout brief unexpectedly rendered a PR writing contract"
+  assert_no_grep "# Fixture PR rule" "$scout" \
+    "scout brief unexpectedly embedded the PR writing contract text"
+  assert_grep "SCOUT task" "$scout" "scout brief should remain a scout contract"
+
+  FM_HOME="$home" FM_SECONDMATE_CHARTER='Supervise alpha.' \
+    "$ROOT/bin/fm-brief.sh" pr-writing-secondmate --secondmate alpha >/dev/null 2>&1 \
+    || fail "active PR writing contract should not block secondmate scaffold"
+  charter="$home/data/pr-writing-secondmate/brief.md"
+  assert_no_grep "# PR writing contract" "$charter" \
+    "secondmate charter unexpectedly rendered a PR writing contract"
+  assert_no_grep "# Fixture PR rule" "$charter" \
+    "secondmate charter unexpectedly embedded the PR writing contract text"
+  assert_grep "persistent second mate" "$charter" \
+    "secondmate charter should remain a secondmate contract"
+  pass "fm-brief.sh: PR writing contract is scoped to ordinary ship briefs"
 }
 
 # A ship task's delivery mode is firstmate's per-task decision, so a missing or
@@ -527,16 +645,18 @@ test_secondmate_marked_request_reporting_contract() {
 }
 
 test_secondmate_directory_paths_are_absolute_and_output_is_stable() {
-  local root home data_override state_override brief baseline err status
+  local root home data_override state_override config_override brief baseline err status
   root="$TMP_ROOT/relative-directory-inputs"
   mkdir -p "$root"
   root=$(cd "$root" && pwd -P)
   home="$root/home"
   data_override="$root/data-override"
   state_override="$root/state-override"
-  mkdir -p "$home/data" "$home/state" "$data_override" "$state_override" \
+  config_override="$root/config-override"
+  mkdir -p "$home/data" "$home/state" "$data_override" "$state_override" "$config_override" \
     "$root/cdpath/home/data" "$root/cdpath/home/state" \
-    "$root/cdpath/data-override" "$root/cdpath/state-override"
+    "$root/cdpath/data-override" "$root/cdpath/state-override" \
+    "$root/cdpath/config-override"
 
   brief="$home/data/relative-home/brief.md"
   FM_HOME="$home" FM_SECONDMATE_CHARTER=x \
@@ -586,6 +706,26 @@ test_secondmate_directory_paths_are_absolute_and_output_is_stable() {
   assert_grep ">> '$home/state/relative-data.status'" "$brief" \
     "relative FM_DATA_OVERRIDE changed the absolute default status path"
 
+  printf '%s\n' "relative config contract" > "$config_override/pr-writing-contract.md"
+  printf '%s\n' "wrong CDPATH config contract" > "$root/cdpath/config-override/pr-writing-contract.md"
+  brief="$home/data/relative-config/brief.md"
+  FM_HOME="$home" FM_CONFIG_OVERRIDE="$config_override" \
+    "$ROOT/bin/fm-brief.sh" relative-config alpha --mode direct-PR >/dev/null 2>&1
+  baseline="$root/absolute-config-ship"
+  cp "$brief" "$baseline"
+  rm -f "$brief"
+  (
+    cd "$root" || exit 1
+    CDPATH="$root/cdpath" FM_HOME="$home" FM_CONFIG_OVERRIDE=config-override \
+      "$ROOT/bin/fm-brief.sh" relative-config alpha --mode direct-PR >/dev/null 2>&1
+  )
+  cmp -s "$baseline" "$brief" \
+    || fail "relative FM_CONFIG_OVERRIDE changed ship bytes compared with the same absolute config directory"
+  assert_grep "relative config contract" "$brief" \
+    "relative FM_CONFIG_OVERRIDE did not render the intended config directory"
+  assert_no_grep "wrong CDPATH config contract" "$brief" \
+    "relative FM_CONFIG_OVERRIDE followed CDPATH"
+
   err="$root/unresolved.err"
   (
     cd "$root" || exit 1
@@ -614,7 +754,16 @@ test_secondmate_directory_paths_are_absolute_and_output_is_stable() {
   assert_grep "FM_DATA_OVERRIDE directory cannot be resolved: missing-data" "$err" \
     "unresolved relative FM_DATA_OVERRIDE did not fail loudly"
 
-  pass "fm-brief.sh: relative directory inputs ignore CDPATH, render stable absolute charter paths, or fail loudly"
+  (
+    cd "$root" || exit 1
+    FM_HOME="$home" FM_CONFIG_OVERRIDE=missing-config \
+      "$ROOT/bin/fm-brief.sh" unresolved-config alpha --mode direct-PR >/dev/null 2>"$err"
+  ); status=$?
+  expect_code 1 "$status" "an unresolved relative FM_CONFIG_OVERRIDE must fail"
+  assert_grep "FM_CONFIG_OVERRIDE directory cannot be resolved: missing-config" "$err" \
+    "unresolved relative FM_CONFIG_OVERRIDE did not fail loudly"
+
+  pass "fm-brief.sh: relative directory inputs ignore CDPATH, render stable paths, or fail loudly"
 }
 
 test_herdr_lab_contract_applies_to_scouts_but_not_secondmates() {
@@ -714,6 +863,9 @@ test_script_parses
 test_no_heredoc_in_command_substitution
 test_help_includes_entire_header
 test_ship_modes_generate_clean_briefs
+test_pr_writing_contract_absent_and_empty_preserve_ship_behavior
+test_pr_writing_contract_renders_once_for_every_ship_mode
+test_pr_writing_contract_is_ship_only
 test_ship_mode_is_required_and_closed_set
 test_ship_mode_is_explicit_not_registry
 test_delivery_flags_are_refused_where_they_do_not_apply

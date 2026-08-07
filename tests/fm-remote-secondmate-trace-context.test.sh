@@ -270,12 +270,24 @@ FM_HOME="$PROTOCOL_HOME" "$REMOTE_ROOT/bin/fm-remote-inherit.sh" \
   put config/trace-context "$FLAG_BYTES" "$FLAG_HASH" 1 < "$TMP_ROOT/flag-payload" >/dev/null \
   || fail "the remote inherit receiver refused a declared inheritable item"
 assert_present "$PROTOCOL_HOME/config/trace-context" "the accepted inherited enablement flag was not published"
+printf '%s\n' 'Remote PR wording contract' > "$TMP_ROOT/pr-writing-payload"
+PR_BYTES=$(LC_ALL=C wc -c < "$TMP_ROOT/pr-writing-payload" | tr -d ' ')
+if command -v shasum >/dev/null 2>&1; then
+  PR_HASH=$(shasum -a 256 "$TMP_ROOT/pr-writing-payload" | awk '{print $1}')
+else
+  PR_HASH=$(sha256sum "$TMP_ROOT/pr-writing-payload" | awk '{print $1}')
+fi
+FM_HOME="$PROTOCOL_HOME" "$REMOTE_ROOT/bin/fm-remote-inherit.sh" \
+  put config/pr-writing-contract.md "$PR_BYTES" "$PR_HASH" 2 < "$TMP_ROOT/pr-writing-payload" >/dev/null \
+  || fail "the remote inherit receiver refused the PR writing contract"
+cmp -s "$TMP_ROOT/pr-writing-payload" "$PROTOCOL_HOME/config/pr-writing-contract.md" \
+  || fail "the remote inherited PR writing contract bytes were not published exactly"
 if FM_HOME="$PROTOCOL_HOME" "$REMOTE_ROOT/bin/fm-remote-inherit.sh" \
   put config/secondmate-harness "$FLAG_BYTES" "$FLAG_HASH" 1 < "$TMP_ROOT/flag-payload" >/dev/null 2>&1; then
   fail "the remote inherit receiver accepted an item outside the declared set"
 fi
 assert_absent "$PROTOCOL_HOME/config/secondmate-harness" "a non-inheritable item was published remotely"
-pass "allowlist: the remote receiver accepts exactly the declared inherited-material set, including the enablement flag"
+pass "allowlist: the remote receiver accepts declared inherited material and rejects non-inherited config"
 
 # --- the delivery flag is the only caller-supplied path to a pane export -----
 # A remote host receives the carrier as an argument rather than resolving it, so

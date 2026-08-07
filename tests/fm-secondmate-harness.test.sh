@@ -14,13 +14,14 @@
 #      explicit per-spawn harness arg still wins.
 #   B) Inheritance. The primary pushes a declared, extensible set of LOCAL
 #      (gitignored) config items - config/crew-dispatch.json, config/crew-harness,
-#      config/backlog-backend, config/backend, config/herdr-presentation-spaces,
-#      config/startup-memory-budget, and config/trace-context -
+#      config/pr-writing-contract.md, config/backlog-backend, config/backend,
+#      config/herdr-presentation-spaces, config/startup-memory-budget, and
+#      config/trace-context -
 #      down into each secondmate home's config/, so the secondmate's OWN crewmates,
-#      dispatch profiles, backlog backend, runtime-backend default, Herdr
-#      presentation choice, startup-memory budget, and trace context inherit the
-#      primary's settings. For config/herdr-presentation-spaces, an absent
-#      primary file and an absent destination file both mean the same
+#      dispatch profiles, PR-writing contract, backlog backend, runtime-backend
+#      default, Herdr presentation choice, startup-memory budget, and trace
+#      context inherit the primary's settings. For config/herdr-presentation-spaces,
+#      an absent primary file and an absent destination file both mean the same
 #      unconfigured default, so the generic absence mirror converges that item
 #      without deciding its release-dependent floor.
 #      It is primary-authoritative
@@ -268,6 +269,7 @@ test_propagate_lib() {
   # 1. present source is copied
   printf '{"default":{"harness":"codex"}}\n' > "$src/crew-dispatch.json"
   printf 'codex\n' > "$src/crew-harness"
+  printf 'fixture PR wording\n' > "$src/pr-writing-contract.md"
   printf 'manual\n' > "$src/backlog-backend"
   printf 'tmux\n' > "$src/backend"
   : > "$src/herdr-presentation-spaces"
@@ -279,6 +281,7 @@ test_propagate_lib() {
   [ ! -s "$stderr" ] || fail "clean copy wrote to stderr"
   [ "$(cat "$dest/crew-dispatch.json")" = '{"default":{"harness":"codex"}}' ] || fail "crew-dispatch.json not propagated"
   [ "$(cat "$dest/crew-harness")" = codex ] || fail "crew-harness not propagated"
+  [ "$(cat "$dest/pr-writing-contract.md")" = "fixture PR wording" ] || fail "pr-writing-contract.md not propagated"
   [ "$(cat "$dest/backlog-backend")" = manual ] || fail "backlog-backend not propagated"
   [ "$(cat "$dest/backend")" = tmux ] || fail "backend not propagated"
   [ -f "$dest/herdr-presentation-spaces" ] || fail "herdr-presentation-spaces not propagated"
@@ -301,11 +304,13 @@ test_propagate_lib() {
   # 3. a changed source value converges downstream
   printf '{"default":{"harness":"claude"}}\n' > "$src/crew-dispatch.json"
   printf 'claude\n' > "$src/crew-harness"
+  printf 'replacement PR wording\n' > "$src/pr-writing-contract.md"
   printf 'tasks-axi\n' > "$src/backlog-backend"
   printf 'zellij\n' > "$src/backend"
   propagate_inheritable_config "$src" "$dest"
   [ "$(cat "$dest/crew-dispatch.json")" = '{"default":{"harness":"claude"}}' ] || fail "changed dispatch profile did not converge"
   [ "$(cat "$dest/crew-harness")" = claude ] || fail "changed value did not converge"
+  [ "$(cat "$dest/pr-writing-contract.md")" = "replacement PR wording" ] || fail "changed PR writing contract did not converge"
   [ "$(cat "$dest/backlog-backend")" = tasks-axi ] || fail "changed backlog backend did not converge"
   [ "$(cat "$dest/backend")" = zellij ] || fail "changed backend did not converge"
 
@@ -321,11 +326,12 @@ test_propagate_lib() {
 
   # 4. removing the source mirrors absence downstream (primary-authoritative)
   printf 'herdr\n' > "$dest/backend"
-  rm -f "$src/crew-dispatch.json" "$src/crew-harness" "$src/backlog-backend" \
-    "$src/backend" "$src/herdr-presentation-spaces" "$src/trace-context"
+  rm -f "$src/crew-dispatch.json" "$src/crew-harness" "$src/pr-writing-contract.md" \
+    "$src/backlog-backend" "$src/backend" "$src/herdr-presentation-spaces" "$src/trace-context"
   propagate_inheritable_config "$src" "$dest"
   [ -e "$dest/crew-dispatch.json" ] && fail "dispatch profile absence not mirrored downstream"
   [ -e "$dest/crew-harness" ] && fail "absence not mirrored downstream"
+  [ -e "$dest/pr-writing-contract.md" ] && fail "PR writing contract absence not mirrored downstream"
   [ -e "$dest/backlog-backend" ] && fail "backlog-backend absence not mirrored downstream"
   [ -e "$dest/backend" ] && fail "backend absence not mirrored downstream"
   [ -e "$dest/herdr-presentation-spaces" ] && fail "herdr-presentation-spaces absence not mirrored downstream"
@@ -350,6 +356,7 @@ test_propagate_lib() {
   printf 'grok\n' > "$src/secondmate-harness"
   printf '{"default":{"harness":"codex"}}\n' > "$src/crew-dispatch.json"
   printf 'codex\n' > "$src/crew-harness"
+  printf 'ship PR wording\n' > "$src/pr-writing-contract.md"
   printf 'manual\n' > "$src/backlog-backend"
   printf 'herdr\n' > "$src/backend"
   rm -rf "$d/home2"
@@ -358,6 +365,7 @@ test_propagate_lib() {
   [ -e "$d/home2/config/secondmate-harness" ] && fail "secondmate-harness was inherited (must not be)"
   [ "$(cat "$d/home2/config/crew-dispatch.json")" = '{"default":{"harness":"codex"}}' ] || fail "crew-dispatch.json not propagated alongside"
   [ "$(cat "$d/home2/config/crew-harness")" = codex ] || fail "crew-harness not propagated alongside"
+  [ "$(cat "$d/home2/config/pr-writing-contract.md")" = "ship PR wording" ] || fail "pr-writing-contract.md not propagated alongside"
   [ "$(cat "$d/home2/config/backlog-backend")" = manual ] || fail "backlog-backend not propagated alongside"
   [ "$(cat "$d/home2/config/backend")" = herdr ] || fail "backend not propagated alongside"
 
@@ -939,7 +947,8 @@ new_world() {
   {
     printf 'projects/\nstate/\ndata/\n.no-mistakes/\n'
     [ "$dispatch_ignore" = no ] || printf 'config/crew-dispatch.json\n'
-    printf 'config/crew-harness\nconfig/secondmate-harness\nconfig/backlog-backend\n'
+    printf 'config/crew-harness\nconfig/pr-writing-contract.md\n'
+    printf 'config/secondmate-harness\nconfig/backlog-backend\n'
     printf 'config/backend\nconfig/herdr-presentation-spaces\nconfig/startup-memory-budget\n'
   } > "$w/main/.gitignore"
   printf 'v1\n' > "$w/main/AGENTS.md"

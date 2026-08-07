@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Behavior tests for primary-authoritative shared captain-preference inheritance.
+# Behavior tests for primary-authoritative shared captain-preference and local
+# config inheritance.
 #
 # The narrow shared surface is exactly data/captain-shared.md.
 # data/captain.md and data/learnings.md remain domain-local in every home.
@@ -38,6 +39,12 @@ write_shared() {
   local path=$1 body=$2
   shared_header > "$path"
   printf '%s\n' "$body" >> "$path"
+}
+
+write_pr_contract() {
+  local path=$1 body=$2
+  mkdir -p "$(dirname "$path")"
+  printf '%s\n' "$body" > "$path"
 }
 
 new_home_pair() {
@@ -202,6 +209,55 @@ test_unsafe_artifacts_and_failure_restore_readonly_mode() {
   assert_grep "failed to quarantine divergent destination" "$err" \
     "recoverable failure should explain quarantine failure"
   pass "unsafe shared captain artifacts are rejected and failure restores read-only mode"
+}
+
+test_pr_writing_contract_inherits_into_secondmate_worker_briefs() {
+  local rec primary second report brief out
+  rec=$(new_home_pair pr-writing-contract)
+  primary=${rec%%|*}
+  second=${rec#*|}
+  report="$TMP_ROOT/pr-writing-contract.report"
+  write_pr_contract "$primary/config/pr-writing-contract.md" \
+    $'Inherited fixture title rule\n\nInherited fixture body rule'
+
+  out=$(FM_CONFIG_INHERIT_REPORT="$report" propagate_secondmate_inheritance "$primary" "$second")
+
+  [ -z "$out" ] || fail "PR writing contract inheritance should not emit diagnostics: $out"
+  cmp -s "$primary/config/pr-writing-contract.md" "$second/config/pr-writing-contract.md" \
+    || fail "PR writing contract did not converge into secondmate config"
+  assert_grep $'pr-writing-contract.md\tpushed\t' "$report" \
+    "PR writing contract first copy should report pushed"
+  FM_HOME="$second" "$ROOT/bin/fm-brief.sh" secondmate-worker alpha --mode direct-PR >/dev/null 2>&1 \
+    || fail "secondmate worker brief should scaffold with inherited PR writing contract"
+  brief="$second/data/secondmate-worker/brief.md"
+  assert_grep "Inherited fixture title rule" "$brief" \
+    "secondmate worker brief did not receive the inherited PR writing contract"
+  assert_grep "authoritative final PR title/body contract" "$brief" \
+    "secondmate worker brief did not mark the inherited contract as authoritative"
+
+  write_pr_contract "$second/config/pr-writing-contract.md" "secondmate-local drift"
+  write_pr_contract "$primary/config/pr-writing-contract.md" "primary replacement rule"
+  : > "$report"
+  out=$(FM_CONFIG_INHERIT_REPORT="$report" propagate_secondmate_inheritance "$primary" "$second")
+  [ -z "$out" ] || fail "PR writing contract replacement should not emit diagnostics: $out"
+  cmp -s "$primary/config/pr-writing-contract.md" "$second/config/pr-writing-contract.md" \
+    || fail "primary PR writing contract did not overwrite secondmate-local drift"
+  assert_grep $'pr-writing-contract.md\tpushed\t' "$report" \
+    "PR writing contract replacement should report pushed"
+
+  rm -f "$primary/config/pr-writing-contract.md"
+  : > "$report"
+  out=$(FM_CONFIG_INHERIT_REPORT="$report" propagate_secondmate_inheritance "$primary" "$second")
+  [ -z "$out" ] || fail "PR writing contract absence mirror should not emit diagnostics: $out"
+  assert_absent "$second/config/pr-writing-contract.md" \
+    "primary absence should remove the inherited PR writing contract"
+  assert_grep $'pr-writing-contract.md\tpushed\tmirrored primary absence' "$report" \
+    "PR writing contract removal should report mirrored primary absence"
+  FM_HOME="$second" "$ROOT/bin/fm-brief.sh" secondmate-worker-removed alpha --mode direct-PR >/dev/null 2>&1 \
+    || fail "secondmate worker brief should scaffold after inherited PR writing contract removal"
+  assert_no_grep "primary replacement rule" "$second/data/secondmate-worker-removed/brief.md" \
+    "removed inherited PR writing contract still rendered in a secondmate worker brief"
+  pass "PR writing contract inherits into secondmate homes and controls their worker briefs"
 }
 
 make_fake_spawn_toolchain() {
@@ -396,6 +452,7 @@ test_first_copy_readonly_and_local_files_preserved
 test_drift_quarantine_collision_and_repeated_convergence
 test_missing_source_mirrors_absence_without_losing_local_bytes
 test_unsafe_artifacts_and_failure_restore_readonly_mode
+test_pr_writing_contract_inherits_into_secondmate_worker_briefs
 test_spawn_convergence_point_copies_shared_file
 test_bootstrap_convergence_point_copies_shared_file
 test_config_push_convergence_point_updates_changed_source

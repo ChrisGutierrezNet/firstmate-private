@@ -54,6 +54,9 @@
 # it carries the AGENTS.md authoring bar (widely useful knowledge only, pointers
 # over copied detail) and has the crewmate add the fm-ensure-agents-md.sh
 # self-governance section when a touched project AGENTS.md lacks it.
+# When config/pr-writing-contract.md exists in the active home and contains
+# non-whitespace text, ship tasks also embed that text as the authoritative final
+# GitHub PR title/body contract. Scout and secondmate scaffolds never read it.
 # Refuses to overwrite an existing brief.
 set -eu
 
@@ -100,6 +103,11 @@ if [ -n "${FM_STATE_OVERRIDE:-}" ]; then
   STATE=$(resolve_directory_input FM_STATE_OVERRIDE "$FM_STATE_OVERRIDE") || exit 1
 else
   STATE="$FM_HOME/state"
+fi
+if [ -n "${FM_CONFIG_OVERRIDE:-}" ]; then
+  CONFIG=$(resolve_directory_input FM_CONFIG_OVERRIDE "$FM_CONFIG_OVERRIDE") || exit 1
+else
+  CONFIG="$FM_HOME/config"
 fi
 KIND=ship
 HERDR_LAB=0
@@ -174,6 +182,59 @@ shell_quote() {
   printf "'"
   printf '%s' "$1" | sed "s/'/'\\\\''/g"
   printf "'"
+}
+
+FM_PR_WRITING_CONTRACT_FILE=pr-writing-contract.md
+
+pr_writing_contract_active() {
+  local file=$1
+  [ -e "$file" ] || [ -L "$file" ] || return 1
+  if [ ! -f "$file" ] || [ -L "$file" ]; then
+    echo "error: config/$FM_PR_WRITING_CONTRACT_FILE must be a regular non-symlink file" >&2
+    exit 1
+  fi
+  LC_ALL=C grep -q '[^[:space:]]' "$file"
+}
+
+pr_writing_contract_fence() {
+  awk '
+    BEGIN { max = 3 }
+    {
+      line = $0
+      while (match(line, /`+/)) {
+        if (RLENGTH > max) max = RLENGTH
+        line = substr(line, RSTART + RLENGTH)
+      }
+    }
+    END {
+      for (i = 0; i <= max; i++) printf "`"
+      printf "\n"
+    }
+  ' "$1"
+}
+
+render_pr_writing_contract_section() {
+  local file="$CONFIG/$FM_PR_WRITING_CONTRACT_FILE" fence last_byte
+  pr_writing_contract_active "$file" || return 1
+  fence=$(pr_writing_contract_fence "$file") || return 1
+  printf '%s\n' \
+    '# PR writing contract' \
+    "A home-local PR writing contract is active from \`config/$FM_PR_WRITING_CONTRACT_FILE\`." \
+    'Treat the text below as the authoritative final PR title/body contract for any GitHub pull request this task authors or updates.' \
+    'If a repository template, GitHub default, No Mistakes, or another tool writes conflicting PR title or body text, this contract wins for the final live title and authored body.' \
+    '' \
+    "$fence"
+  cat "$file"
+  last_byte=$(tail -c 1 "$file" 2>/dev/null | od -An -tuC | tr -d ' ' || true)
+  [ "$last_byte" = 10 ] || printf '\n'
+  # shellcheck disable=SC2016  # Literal brief text; backtick-wrapped gh-axi must reach the worker unchanged.
+  printf '%s\n' \
+    "$fence" \
+    '' \
+    'After the last automated PR title or body write for this task, read the live GitHub PR title and body with `gh-axi`.' \
+    'If either field conflicts with the contract, rewrite only the PR title and body.' \
+    'Read the live GitHub PR title and body again after that final rewrite and verify the live text satisfies the contract before reporting ready.' \
+    'If this task never creates or updates a GitHub PR, there is no live GitHub PR text to verify.'
 }
 
 STATUS_FILE=$(shell_quote "$STATE/$ID.status")
@@ -351,11 +412,32 @@ fi
 # delivery mode, validated above. The generated DOD opens with the fixed
 # "Delivery contract: mode=<mode>" line that bin/fm-spawn.sh checks against its own
 # explicit --mode before launching.
+PR_WRITING_SECTION=""
+PR_WRITING_ACTIVE=0
+if PR_WRITING_SECTION=$(render_pr_writing_contract_section); then
+  PR_WRITING_ACTIVE=1
+  PR_WRITING_SECTION="${PR_WRITING_SECTION}"$'\n\n'
+else
+  PR_WRITING_SECTION=""
+fi
+
 case "$MODE" in
   direct-PR)
     SETUP2=""
     RULE1='1. Never push to the default branch (push only your `fm/'"$ID"'` branch). Never merge a PR.'
-    IFS= read -r -d '' DOD <<EOF || true
+    if [ "$PR_WRITING_ACTIVE" -eq 1 ]; then
+      IFS= read -r -d '' DOD <<EOF || true
+# Definition of done
+Delivery contract: mode=direct-PR
+This task ships **direct-PR**: you raise the PR yourself, without the no-mistakes pipeline.
+The task is complete only when committed on your branch.
+When it is implemented and committed, push your branch and open a PR with \`gh-axi\`.
+After the PR is open and every automated PR title/body write is complete, apply the active PR writing contract above to the live GitHub title and body.
+Verify the live GitHub title and body with \`gh-axi\` before appending \`done: PR {url}\` to the status file and stopping.
+Do NOT run /no-mistakes. The configured merge authority decides whether to merge the PR; firstmate relays the outcome.
+EOF
+    else
+      IFS= read -r -d '' DOD <<EOF || true
 # Definition of done
 Delivery contract: mode=direct-PR
 This task ships **direct-PR**: you raise the PR yourself, without the no-mistakes pipeline.
@@ -363,6 +445,7 @@ The task is complete only when committed on your branch.
 When it is implemented and committed, push your branch and open a PR with \`gh-axi\`, then append \`done: PR {url}\` to the status file and stop.
 Do NOT run /no-mistakes. The configured merge authority decides whether to merge the PR; firstmate relays the outcome.
 EOF
+    fi
     ;;
   local-only)
     SETUP2=""
@@ -381,7 +464,34 @@ EOF
     SETUP2="
 2. Run \`no-mistakes doctor\`; if it reports the repo is not initialized here, run \`no-mistakes init\`."
     RULE1='1. Never push to the default branch. Never merge a PR.'
-    IFS= read -r -d '' DOD <<EOF || true
+    if [ "$PR_WRITING_ACTIVE" -eq 1 ]; then
+      IFS= read -r -d '' DOD <<EOF || true
+# Definition of done
+Delivery contract: mode=no-mistakes
+The task is complete only when committed on your branch.
+When you believe it is complete, append \`done: {summary}\` to the status file and stop.
+Firstmate will then instruct you to run /no-mistakes to validate and ship a PR.
+
+You drive no-mistakes by responding to its gates, not by implementing fixes.
+Follow the guidance no-mistakes itself provides for the mechanics: it loads when you invoke /no-mistakes, and \`no-mistakes axi run --help\` plus the \`help\` lines in each \`axi\` response are authoritative and version-matched to the installed binary.
+When starting no-mistakes, make \`--intent\` preserve all relevant content from this brief's \`# Task\` section plus every later accepted Firstmate requirement, clarification, constraint, exclusion, and supersession, carrying only each requirement's current accepted form; retain direct requirements instead of substituting a diff summary, and exclude generic operational, status, delivery, and other scaffold boilerplate unless it is task-specific.
+Do not hand-edit, commit, or fix findings yourself while a run is active - the pipeline applies every fix.
+
+With the active PR writing contract above, do not edit code, commits, or the PR title/body while a No Mistakes run is active.
+Wait until /no-mistakes reports CI green and returns branch ownership before changing PR text.
+After the final pipeline PR title/body update, you may rewrite only the live GitHub PR title and body to satisfy the contract.
+Read the live GitHub PR title and body again with \`gh-axi\` and verify the final live text satisfies the contract before reporting ready.
+
+Two firstmate-specific rules layer on top of that guidance:
+- ask-user findings are never yours to answer: escalate to firstmate (rule 6) and stop.
+  Firstmate applies the authority contract in its \`AGENTS.md\` and obtains any required captain decision.
+  When the decision comes back, feed it to the gate with \`no-mistakes axi respond\` and let the pipeline apply it - do not route the question to "the user" or implement the fix yourself.
+- Avoid \`--yes\`: it would silently bypass firstmate's authority check and any required captain escalation.
+
+After /no-mistakes reports CI green (the CI-ready return point - do not wait for it to keep monitoring in the background until merge), verify the active PR writing contract against the live GitHub title/body as described above, then append \`done: PR {url} checks green\` and stop. You are finished.
+EOF
+    else
+      IFS= read -r -d '' DOD <<EOF || true
 # Definition of done
 Delivery contract: mode=no-mistakes
 The task is complete only when committed on your branch.
@@ -401,6 +511,7 @@ Two firstmate-specific rules layer on top of that guidance:
 
 After /no-mistakes reports CI green (the CI-ready return point - do not wait for it to keep monitoring in the background until merge), append \`done: PR {url} checks green\` and stop. You are finished.
 EOF
+    fi
     ;;
 esac
 
@@ -452,7 +563,7 @@ $RULE1
    every lane/home, so restarting it kills other lanes' in-flight pipeline runs. On ANY no-mistakes
    daemon error, append \`blocked: {the daemon error}\` and stop; only firstmate manages the daemon.
 
-# Project memory
+$PR_WRITING_SECTION# Project memory
 If \`AGENTS.md\` or \`CLAUDE.md\` already exists, or if this task produced durable project-intrinsic knowledge, run \`$FM_ROOT/bin/fm-ensure-agents-md.sh .\` in the worktree.
 Record only project knowledge useful to almost every future session.
 For anything the codebase already shows, prefer a pointer to the authoritative file, command, or doc over copying the detail.
