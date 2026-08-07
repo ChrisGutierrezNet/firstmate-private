@@ -196,6 +196,7 @@ herdr_tab_id=<tab-id>
 herdr_pane_id=<pane-id>
 ```
 
+The cross-backend cleanup binding is still required, and [`configuration.md`](configuration.md) owns `endpoint_task_id=` and the complete runtime metadata schema.
 A Herdr pane id contains a colon, so the adapter splits `window=` on the first colon only.
 The recorded pane is the operational fast path.
 Workspace and tab ids support verification and cleanup but are not inferred from mutable labels during normal operation.

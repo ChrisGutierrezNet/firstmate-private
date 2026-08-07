@@ -1423,6 +1423,261 @@ SH
   chmod +x "$case_dir/fakebin/herdr"
 }
 
+remove_task_endpoint_binding() {  # <case-dir> <task-id>
+  local case_dir=$1 task_id=$2 meta
+  meta="$case_dir/state/$task_id.meta"
+  sed -i.bak '/^endpoint_task_id=/d' "$meta"
+  rm -f "$meta.bak"
+}
+
+replace_task_endpoint_binding() {  # <case-dir> <task-id> <binding>
+  local case_dir=$1 task_id=$2 binding=$3 meta
+  meta="$case_dir/state/$task_id.meta"
+  sed -i.bak "s/^endpoint_task_id=.*/endpoint_task_id=$binding/" "$meta"
+  rm -f "$meta.bak"
+}
+
+record_treehouse_invocations() {  # <case-dir>
+  local case_dir=$1 thlog="$1/treehouse.log"
+  : > "$thlog"
+  cat > "$case_dir/fakebin/treehouse" <<SH
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$thlog"
+exit 0
+SH
+  chmod +x "$case_dir/fakebin/treehouse"
+}
+
+assert_teardown_refusal_preserved_task() {  # <case-dir> <label> <closed-file>
+  local case_dir=$1 label=$2 closed=$3 branch
+  assert_present "$case_dir/state/task-x1.meta" \
+    "$label: refusal erased the durable endpoint metadata"
+  assert_present "$case_dir/state/task-x1.status" \
+    "$label: refusal erased the task status record"
+  assert_present "$case_dir/state/task-x1.turn-ended" \
+    "$label: refusal erased the turn-end record"
+  branch=$(git -C "$case_dir/wt" rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+  [ "$branch" = "fm/task-x1" ] || fail "$label: refusal dropped the task branch"
+  if [ -s "$case_dir/treehouse.log" ]; then
+    fail "$label: refusal returned the isolated copy: $(cat "$case_dir/treehouse.log")"
+  fi
+  [ ! -e "$closed" ] || fail "$label: refusal closed the Herdr pane"
+}
+
+assert_no_endpoint_binding_written() {  # <case-dir> <task-id> <label>
+  local case_dir=$1 task_id=$2 label=$3
+  ! grep -q '^endpoint_task_id=' "$case_dir/state/$task_id.meta" \
+    || fail "$label: refusal wrote an endpoint task binding"
+}
+
+test_legacy_herdr_exact_adoption_teardown_completes_and_preserves_unrelated_records() {
+  local case_dir log closed
+  case_dir=$(make_case herdr-legacy-adoption)
+  write_meta "$case_dir" local-only ship
+  configure_flat_herdr_teardown_case "$case_dir"
+  remove_task_endpoint_binding "$case_dir" task-x1
+  record_treehouse_invocations "$case_dir"
+  log="$case_dir/herdr.log"; : > "$log"
+  closed="$case_dir/closed"
+  : > "$case_dir/state/task-x1.status"
+  : > "$case_dir/state/task-x1.turn-ended"
+  mkdir -p "$case_dir/other-wt"
+  fm_write_meta "$case_dir/state/other-task.meta" \
+    "window=firstmate:fm-other-task" \
+    "endpoint_task_id=other-task" \
+    "worktree=$case_dir/other-wt" \
+    "project=$case_dir/project" \
+    "kind=ship" \
+    "mode=local-only"
+  : > "$case_dir/state/other-task.status"
+  git -C "$case_dir/project" branch fm/unrelated main
+
+  FM_FAKE_HERDR_LOG="$log" FM_FAKE_HERDR_CLOSED="$closed" \
+    run_teardown "$case_dir" --force > "$case_dir/stdout" 2> "$case_dir/stderr" \
+    || fail "herdr-legacy-adoption: forced teardown failed: $(cat "$case_dir/stderr")"
+
+  assert_absent "$case_dir/state/task-x1.meta" \
+    "herdr-legacy-adoption: teardown left the task metadata behind"
+  assert_absent "$case_dir/state/task-x1.status" \
+    "herdr-legacy-adoption: teardown left the task status behind"
+  assert_present "$closed" \
+    "herdr-legacy-adoption: teardown never closed the exact Herdr pane"
+  assert_grep "pane close wG:pQ" "$log" \
+    "herdr-legacy-adoption: teardown did not close the recorded Herdr pane"
+  assert_grep "return --force $case_dir/wt" "$case_dir/treehouse.log" \
+    "herdr-legacy-adoption: teardown did not return the isolated copy"
+  assert_present "$case_dir/state/other-task.meta" \
+    "herdr-legacy-adoption: unrelated metadata was removed"
+  assert_present "$case_dir/state/other-task.status" \
+    "herdr-legacy-adoption: unrelated status was removed"
+  git -C "$case_dir/project" show-ref --verify --quiet refs/heads/fm/unrelated \
+    || fail "herdr-legacy-adoption: unrelated branch was removed"
+  grep -q "teardown task-x1 complete" "$case_dir/stdout" \
+    || fail "herdr-legacy-adoption: teardown did not report completion"
+  pass "legacy Herdr exact adoption enables teardown while preserving unrelated records and branches"
+}
+
+test_herdr_endpoint_binding_mismatch_and_duplicate_still_refuse_before_changes() {
+  local case_dir log closed rc mode
+  for mode in mismatched duplicate; do
+    case_dir=$(make_case "herdr-binding-$mode")
+    write_meta "$case_dir" local-only ship
+    configure_flat_herdr_teardown_case "$case_dir"
+    if [ "$mode" = mismatched ]; then
+      replace_task_endpoint_binding "$case_dir" task-x1 other-task
+    else
+      printf '%s\n' 'endpoint_task_id=task-x1' >> "$case_dir/state/task-x1.meta"
+    fi
+    record_treehouse_invocations "$case_dir"
+    log="$case_dir/herdr.log"; : > "$log"
+    closed="$case_dir/closed"
+    : > "$case_dir/state/task-x1.status"
+    : > "$case_dir/state/task-x1.turn-ended"
+
+    rc=0
+    FM_FAKE_HERDR_LOG="$log" FM_FAKE_HERDR_CLOSED="$closed" \
+      run_teardown "$case_dir" --force > "$case_dir/stdout" 2> "$case_dir/stderr" || rc=$?
+    [ "$rc" -ne 0 ] || fail "herdr-binding-$mode: teardown unexpectedly succeeded"
+    assert_teardown_refusal_preserved_task "$case_dir" "herdr-binding-$mode" "$closed"
+    if [ -s "$log" ]; then
+      fail "herdr-binding-$mode: refusal reached Herdr before endpoint binding validation"
+    fi
+  done
+  pass "Herdr endpoint binding mismatch and duplicate protections still refuse before changes"
+}
+
+test_duplicate_herdr_endpoint_claim_refuses_before_changes() {
+  local case_dir log closed rc
+  case_dir=$(make_case herdr-duplicate-endpoint)
+  write_meta "$case_dir" local-only ship
+  configure_flat_herdr_teardown_case "$case_dir"
+  record_treehouse_invocations "$case_dir"
+  log="$case_dir/herdr.log"; : > "$log"
+  closed="$case_dir/closed"
+  : > "$case_dir/state/task-x1.status"
+  : > "$case_dir/state/task-x1.turn-ended"
+  mkdir -p "$case_dir/other-wt"
+  fm_write_meta "$case_dir/state/other-endpoint.meta" \
+    "window=default:wG:pQ" \
+    "endpoint_task_id=other-endpoint" \
+    "worktree=$case_dir/other-wt" \
+    "project=$case_dir/project" \
+    "kind=ship" \
+    "mode=local-only" \
+    "backend=herdr" \
+    "herdr_session=default" \
+    "herdr_workspace_id=wG" \
+    "herdr_tab_id=wG:tQ" \
+    "herdr_pane_id=wG:pQ"
+
+  rc=0
+  FM_FAKE_HERDR_LOG="$log" FM_FAKE_HERDR_CLOSED="$closed" \
+    run_teardown "$case_dir" --force > "$case_dir/stdout" 2> "$case_dir/stderr" || rc=$?
+  [ "$rc" -ne 0 ] || fail "herdr-duplicate-endpoint: teardown unexpectedly succeeded"
+  assert_teardown_refusal_preserved_task "$case_dir" "herdr-duplicate-endpoint" "$closed"
+  assert_grep "also claimed by task other-endpoint" "$case_dir/stderr" \
+    "herdr-duplicate-endpoint: duplicate endpoint refusal was not visible"
+  if [ -s "$log" ]; then
+    fail "herdr-duplicate-endpoint: refusal reached Herdr before duplicate endpoint validation"
+  fi
+  pass "duplicate Herdr endpoint claims refuse before every destructive change"
+}
+
+test_duplicate_worktree_claim_refuses_current_exact_binding_before_changes() {
+  local case_dir log closed rc
+  case_dir=$(make_case validation-pilot-duplicate-worktree)
+  write_meta "$case_dir" local-only ship
+  configure_flat_herdr_teardown_case "$case_dir"
+  record_treehouse_invocations "$case_dir"
+  log="$case_dir/herdr.log"; : > "$log"
+  closed="$case_dir/closed"
+  : > "$case_dir/state/task-x1.status"
+  : > "$case_dir/state/task-x1.turn-ended"
+  fm_write_meta "$case_dir/state/no-mistakes-ci-authoritative-isolated-pilot.meta" \
+    "window=default:wG:pPilot" \
+    "worktree=$case_dir/wt" \
+    "project=$case_dir/project" \
+    "kind=ship" \
+    "mode=local-only" \
+    "backend=herdr" \
+    "herdr_session=default" \
+    "herdr_workspace_id=wG" \
+    "herdr_tab_id=wG:tPilot" \
+    "herdr_pane_id=wG:pPilot"
+
+  rc=0
+  FM_FAKE_HERDR_LOG="$log" FM_FAKE_HERDR_CLOSED="$closed" \
+    run_teardown "$case_dir" --force > "$case_dir/stdout" 2> "$case_dir/stderr" || rc=$?
+  [ "$rc" -ne 0 ] || fail "validation-pilot-duplicate-worktree: teardown unexpectedly succeeded"
+  assert_teardown_refusal_preserved_task "$case_dir" "validation-pilot-duplicate-worktree" "$closed"
+  assert_grep "also claimed by task no-mistakes-ci-authoritative-isolated-pilot" "$case_dir/stderr" \
+    "validation-pilot-duplicate-worktree: duplicate worktree refusal was not visible"
+  if [ -s "$log" ]; then
+    fail "validation-pilot-duplicate-worktree: refusal reached Herdr before duplicate worktree validation"
+  fi
+  pass "current exact-bound cleanup refuses when a stale pilot record claims the same worktree"
+}
+
+test_legacy_herdr_adoption_refuses_bad_endpoint_evidence_before_changes() {
+  local case_dir log closed rc mode
+  for mode in malformed dead unknown; do
+    case_dir=$(make_case "herdr-legacy-$mode")
+    write_meta "$case_dir" local-only ship
+    configure_flat_herdr_teardown_case "$case_dir"
+    remove_task_endpoint_binding "$case_dir" task-x1
+    if [ "$mode" = malformed ]; then
+      sed -i.bak 's/^herdr_pane_id=.*/herdr_pane_id=wG:pOther/' "$case_dir/state/task-x1.meta"
+      rm -f "$case_dir/state/task-x1.meta.bak"
+    fi
+    record_treehouse_invocations "$case_dir"
+    log="$case_dir/herdr.log"; : > "$log"
+    closed="$case_dir/closed"
+    [ "$mode" != dead ] || : > "$closed"
+    : > "$case_dir/state/task-x1.status"
+    : > "$case_dir/state/task-x1.turn-ended"
+
+    rc=0
+    if [ "$mode" = unknown ]; then
+      FM_FAKE_HERDR_LOG="$log" FM_FAKE_HERDR_CLOSED="$closed" FM_FAKE_HERDR_PANE_GET_GARBAGE=1 \
+        run_teardown "$case_dir" --force > "$case_dir/stdout" 2> "$case_dir/stderr" || rc=$?
+    else
+      FM_FAKE_HERDR_LOG="$log" FM_FAKE_HERDR_CLOSED="$closed" \
+        run_teardown "$case_dir" --force > "$case_dir/stdout" 2> "$case_dir/stderr" || rc=$?
+    fi
+    [ "$rc" -ne 0 ] || fail "herdr-legacy-$mode: teardown unexpectedly succeeded"
+    assert_present "$case_dir/state/task-x1.meta" \
+      "herdr-legacy-$mode: refusal erased the durable endpoint metadata"
+    assert_present "$case_dir/state/task-x1.status" \
+      "herdr-legacy-$mode: refusal erased the task status record"
+    assert_present "$case_dir/state/task-x1.turn-ended" \
+      "herdr-legacy-$mode: refusal erased the turn-end record"
+    [ "$(git -C "$case_dir/wt" rev-parse --abbrev-ref HEAD 2>/dev/null)" = "fm/task-x1" ] \
+      || fail "herdr-legacy-$mode: refusal dropped the task branch"
+    if [ -s "$case_dir/treehouse.log" ]; then
+      fail "herdr-legacy-$mode: refusal returned the isolated copy: $(cat "$case_dir/treehouse.log")"
+    fi
+    assert_no_endpoint_binding_written "$case_dir" task-x1 "herdr-legacy-$mode"
+    assert_no_grep "pane close" "$log" \
+      "herdr-legacy-$mode: refusal closed the Herdr pane"
+    case "$mode" in
+      malformed)
+        assert_grep "malformed or inconsistent" "$case_dir/stderr" \
+          "herdr-legacy-malformed: malformed refusal was not visible"
+        [ ! -s "$log" ] || fail "herdr-legacy-malformed: malformed metadata reached Herdr"
+        ;;
+      dead)
+        assert_grep "points at a dead endpoint" "$case_dir/stderr" \
+          "herdr-legacy-dead: dead endpoint refusal was not visible"
+        ;;
+      unknown)
+        assert_grep "lacks exact read-only endpoint corroboration" "$case_dir/stderr" \
+          "herdr-legacy-unknown: unknown endpoint refusal was not visible"
+        ;;
+    esac
+  done
+  pass "legacy Herdr adoption refuses malformed, dead, and unknown endpoint evidence before changes"
+}
+
 test_herdr_flat_teardown_refuses_orphaning_records_then_retry_completes() {
   local case_dir log closed lock ready release holder_pid rc thlog
   case_dir=$(make_case herdr-orphan-refusal)
@@ -2508,6 +2763,11 @@ test_no_mistakes_truly_unpushed_refuses
 test_local_only_force_overrides_unpushed
 test_teardown_missing_busy_sidecar_completes
 test_herdr_teardown_clears_escalation_marker
+test_legacy_herdr_exact_adoption_teardown_completes_and_preserves_unrelated_records
+test_herdr_endpoint_binding_mismatch_and_duplicate_still_refuse_before_changes
+test_duplicate_herdr_endpoint_claim_refuses_before_changes
+test_duplicate_worktree_claim_refuses_current_exact_binding_before_changes
+test_legacy_herdr_adoption_refuses_bad_endpoint_evidence_before_changes
 test_herdr_flat_teardown_refuses_orphaning_records_then_retry_completes
 test_herdr_flat_teardown_refuses_records_on_unparseable_presence
 test_herdr_flat_teardown_preflight_refuses_before_changes

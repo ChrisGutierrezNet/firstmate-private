@@ -366,6 +366,181 @@ remote_secondmate_teardown_locked() {
   return "$rc"
 }
 
+teardown_meta_task_id() {  # <meta-file>
+  local base=${1##*/}
+  printf '%s' "${base%.meta}"
+}
+
+teardown_canonical_dir_if_existing() {  # <path>
+  local target=$1
+  [ -n "$target" ] || return 1
+  [ -d "$target" ] || return 1
+  CDPATH='' cd -- "$target" 2>/dev/null && pwd -P
+}
+
+teardown_meta_duplicate_endpoint_target() {  # <meta-file>
+  local meta=$1 backend session pane target
+  backend=$(fm_backend_of_meta "$meta")
+  if [ "$backend" = herdr ]; then
+    session=$(fm_meta_get "$meta" herdr_session)
+    pane=$(fm_meta_get "$meta" herdr_pane_id)
+    if [ -n "$session" ] && [ -n "$pane" ]; then
+      printf '%s:%s' "$session" "$pane"
+      return 0
+    fi
+  fi
+  target=$(fm_backend_target_of_meta "$meta")
+  [ -n "$target" ] || return 1
+  printf '%s' "$target"
+}
+
+teardown_refuse_duplicate_endpoint_claims() {  # <state-dir> <task-id> <meta-file> <backend> <target>
+  local state_dir=$1 id=$2 meta=$3 backend=$4 target=$5 other other_id
+  local other_backend other_target
+  [ -n "$target" ] || return 0
+  for other in "$state_dir"/*.meta; do
+    [ -e "$other" ] || continue
+    [ "$other" != "$meta" ] || continue
+    [ -f "$other" ] && [ ! -L "$other" ] || continue
+    other_id=$(teardown_meta_task_id "$other")
+    if grep -Fxq "endpoint_task_id=$id" "$other" 2>/dev/null; then
+      echo "REFUSED: endpoint task binding for $id is also claimed by task $other_id; preserving task state." >&2
+      return 1
+    fi
+    other_backend=$(fm_backend_of_meta "$other")
+    [ "$other_backend" = "$backend" ] || continue
+    other_target=$(teardown_meta_duplicate_endpoint_target "$other" 2>/dev/null || true)
+    [ -n "$other_target" ] || continue
+    if [ "$other_target" = "$target" ]; then
+      echo "REFUSED: $backend endpoint $target for task $id is also claimed by task $other_id; preserving task state." >&2
+      return 1
+    fi
+  done
+  return 0
+}
+
+teardown_refuse_duplicate_worktree_claims() {  # <state-dir> <task-id> <meta-file> <worktree>
+  local state_dir=$1 id=$2 meta=$3 worktree=$4 current other other_id other_wt other_real
+  current=$(teardown_canonical_dir_if_existing "$worktree" 2>/dev/null || true)
+  [ -n "$current" ] || return 0
+  for other in "$state_dir"/*.meta; do
+    [ -e "$other" ] || continue
+    [ "$other" != "$meta" ] || continue
+    [ -f "$other" ] && [ ! -L "$other" ] || continue
+    other_wt=$(fm_meta_get "$other" worktree)
+    [ -n "$other_wt" ] || continue
+    other_real=$(teardown_canonical_dir_if_existing "$other_wt" 2>/dev/null || true)
+    [ -n "$other_real" ] || continue
+    [ "$other_real" = "$current" ] || continue
+    other_id=$(teardown_meta_task_id "$other")
+    echo "REFUSED: worktree $current for task $id is also claimed by task $other_id; preserving task state." >&2
+    return 1
+  done
+  return 0
+}
+
+teardown_legacy_herdr_meta_consistent() {  # <meta-file> <task-id>
+  local meta=$1 id=$2 window worktree project session workspace tab pane
+  window=$(fm_backend_meta_exact_value "$meta" window) || {
+    echo "REFUSED: legacy Herdr endpoint metadata for task $id is missing an exact window endpoint; preserving task state." >&2
+    return 1
+  }
+  worktree=$(fm_backend_meta_exact_value "$meta" worktree) || {
+    echo "REFUSED: legacy Herdr endpoint metadata for task $id is missing an exact worktree identity; preserving task state." >&2
+    return 1
+  }
+  project=$(fm_backend_meta_exact_value "$meta" project) || {
+    echo "REFUSED: legacy Herdr endpoint metadata for task $id is missing an exact project identity; preserving task state." >&2
+    return 1
+  }
+  session=$(fm_backend_meta_exact_value "$meta" herdr_session) || session=
+  workspace=$(fm_backend_meta_exact_value "$meta" herdr_workspace_id) || workspace=
+  tab=$(fm_backend_meta_exact_value "$meta" herdr_tab_id) || tab=
+  pane=$(fm_backend_meta_exact_value "$meta" herdr_pane_id) || pane=
+  if [ -z "$session" ] || [ -z "$workspace" ] || [ -z "$tab" ] || [ -z "$pane" ] \
+    || [ "$window" != "$session:$pane" ] \
+    || ! fm_backend_endpoint_atom_valid "$session" \
+    || ! fm_backend_endpoint_atom_valid "$workspace" \
+    || ! fm_backend_endpoint_atom_valid "${tab//:/_}" \
+    || ! fm_backend_endpoint_atom_valid "${pane//:/_}"; then
+    echo "REFUSED: legacy Herdr endpoint metadata for task $id is malformed or inconsistent; preserving task state." >&2
+    return 1
+  fi
+  case "$window$worktree$project$session$workspace$tab$pane" in *$'\n'*|*$'\r'*|*$'\t'*)
+    echo "REFUSED: legacy Herdr endpoint metadata for task $id is malformed or inconsistent; preserving task state." >&2
+    return 1
+    ;;
+  esac
+  TEARDOWN_LEGACY_HERDR_WINDOW=$window
+  TEARDOWN_LEGACY_HERDR_WORKTREE=$worktree
+  TEARDOWN_LEGACY_HERDR_SESSION=$session
+  TEARDOWN_LEGACY_HERDR_WORKSPACE=$workspace
+  TEARDOWN_LEGACY_HERDR_TAB=$tab
+  TEARDOWN_LEGACY_HERDR_PANE=$pane
+}
+
+teardown_legacy_herdr_endpoint_corroborated() {  # <task-id> <session> <workspace> <tab> <pane>
+  local id=$1 session=$2 workspace=$3 tab=$4 pane=$5 out code matched
+  fm_backend_source herdr || {
+    echo "REFUSED: legacy Herdr endpoint metadata for task $id cannot be corroborated because the Herdr adapter is unavailable; preserving task state." >&2
+    return 1
+  }
+  if ! command -v herdr >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
+    echo "REFUSED: legacy Herdr endpoint metadata for task $id cannot be corroborated because Herdr inspection tooling is unavailable; preserving task state." >&2
+    return 1
+  fi
+  out=$(fm_backend_herdr_cli "$session" pane get "$pane" 2>&1 || true)
+  code=$(printf '%s' "$out" | jq -r '.error.code // empty' 2>/dev/null || true)
+  if [ "$code" = pane_not_found ]; then
+    echo "REFUSED: legacy Herdr endpoint metadata for task $id points at a dead endpoint; preserving task state." >&2
+    return 1
+  fi
+  if [ -n "$code" ]; then
+    echo "REFUSED: legacy Herdr endpoint metadata for task $id has ambiguous endpoint ownership evidence; preserving task state." >&2
+    return 1
+  fi
+  matched=$(printf '%s' "$out" | jq -r --arg workspace "$workspace" --arg tab "$tab" --arg pane "$pane" '
+    select((.result.pane | type) == "object")
+    | select(.result.pane.pane_id == $pane)
+    | select(.result.pane.tab_id == $tab)
+    | select(.result.pane.workspace_id == $workspace)
+    | "yes"
+  ' 2>/dev/null || true)
+  if [ "$matched" != yes ]; then
+    echo "REFUSED: legacy Herdr endpoint metadata for task $id lacks exact read-only endpoint corroboration; preserving task state." >&2
+    return 1
+  fi
+}
+
+teardown_adopt_legacy_herdr_endpoint_binding() {  # <meta-file> <task-id>
+  local meta=$1 id=$2 backend_count backend binding_count state_dir kind
+  [ -f "$meta" ] && [ ! -L "$meta" ] || return 0
+  backend_count=$(grep -c '^backend=' "$meta" 2>/dev/null || true)
+  [ "$backend_count" -eq 1 ] || return 0
+  backend=$(fm_backend_meta_exact_value "$meta" backend 2>/dev/null || true)
+  [ "$backend" = herdr ] || return 0
+  binding_count=$(grep -c '^endpoint_task_id=' "$meta" 2>/dev/null || true)
+  [ "$binding_count" -eq 0 ] || return 0
+  teardown_legacy_herdr_meta_consistent "$meta" "$id" || return 1
+  state_dir=${meta%/*}
+  teardown_refuse_duplicate_endpoint_claims \
+    "$state_dir" "$id" "$meta" herdr "$TEARDOWN_LEGACY_HERDR_WINDOW" || return 1
+  kind=$(fm_meta_get "$meta" kind)
+  if [ "$kind" != secondmate ]; then
+    teardown_refuse_duplicate_worktree_claims \
+      "$state_dir" "$id" "$meta" "$TEARDOWN_LEGACY_HERDR_WORKTREE" || return 1
+  fi
+  teardown_legacy_herdr_endpoint_corroborated \
+    "$id" "$TEARDOWN_LEGACY_HERDR_SESSION" "$TEARDOWN_LEGACY_HERDR_WORKSPACE" \
+    "$TEARDOWN_LEGACY_HERDR_TAB" "$TEARDOWN_LEGACY_HERDR_PANE" || return 1
+  binding_count=$(grep -c '^endpoint_task_id=' "$meta" 2>/dev/null || true)
+  [ "$binding_count" -eq 0 ] || return 0
+  printf 'endpoint_task_id=%s\n' "$id" >> "$meta" || {
+    echo "error: failed to record adopted Herdr endpoint binding for task $id; preserving task state." >&2
+    return 1
+  }
+}
+
 if remote_secondmate_teardown_locked; then
   exit 0
 else
@@ -373,14 +548,22 @@ else
 fi
 [ "$remote_teardown_rc" -eq 3 ] || exit "$remote_teardown_rc"
 
-# This is the first cleanup authorization check. It is metadata-only and must
-# complete before fm-guard, a backend command, file removal, branch deletion,
-# worktree return, registry change, or process termination can run.
+# This is the first cleanup authorization gate. It must complete before
+# fm-guard, a backend command, file removal, branch deletion, worktree return,
+# registry change, or process termination can run. The only legacy runtime
+# read here is Herdr endpoint corroboration, and it is read-only.
+teardown_adopt_legacy_herdr_endpoint_binding "$META" "$ID" || exit 1
 fm_backend_validate_task_endpoint "$META" "$ID" || exit 1
 BACKEND=$FM_BACKEND_VALIDATED_BACKEND
 T=$FM_BACKEND_VALIDATED_TARGET
 WT=$(fm_meta_get "$META" worktree)
 PROJ=$(fm_meta_get "$META" project)
+KIND=$(grep '^kind=' "$META" | cut -d= -f2- || true)
+[ -n "$KIND" ] || KIND=ship
+teardown_refuse_duplicate_endpoint_claims "$STATE" "$ID" "$META" "$BACKEND" "$T" || exit 1
+if [ "$KIND" != secondmate ]; then
+  teardown_refuse_duplicate_worktree_claims "$STATE" "$ID" "$META" "$WT" || exit 1
+fi
 T_ORCA=
 [ "$BACKEND" != orca ] || T_ORCA=$T
 if [ "${FM_TEARDOWN_GUARD_DONE:-0}" != 1 ]; then
@@ -398,8 +581,6 @@ fi
 ORCA_WORKTREE_ID=$(fm_meta_get "$META" orca_worktree_id)
 ORCA_PATH_MATCH_VERIFIED=0
 
-KIND=$(grep '^kind=' "$META" | cut -d= -f2- || true)
-[ -n "$KIND" ] || KIND=ship
 MODE=$(grep '^mode=' "$META" | cut -d= -f2- || true)
 [ -n "$MODE" ] || MODE=no-mistakes
 PUBLIC_FOLLOWUP_HOME=$FM_HOME
@@ -1834,6 +2015,7 @@ validate_firstmate_home_children_removal() {
   for child_meta in "$sub_state"/*.meta; do
     [ -e "$child_meta" ] || continue
     child_id=$(basename "$child_meta" .meta)
+    teardown_adopt_legacy_herdr_endpoint_binding "$child_meta" "$child_id" || return 1
     fm_backend_validate_task_endpoint "$child_meta" "$child_id" || return 1
     validate_pr_poll_cleanup "$sub_state" "$child_id" || return 1
     child_wt=$(meta_value "$child_meta" worktree)
@@ -1978,6 +2160,7 @@ preflight_firstmate_home_herdr_children() {  # <home>
   for child_meta in "$sub_state"/*.meta; do
     [ -e "$child_meta" ] || continue
     child_id=$(basename "$child_meta" .meta)
+    teardown_adopt_legacy_herdr_endpoint_binding "$child_meta" "$child_id" || return 1
     fm_backend_validate_task_endpoint "$child_meta" "$child_id" || return 1
     child_backend=$FM_BACKEND_VALIDATED_BACKEND
     child_target=$FM_BACKEND_VALIDATED_TARGET
