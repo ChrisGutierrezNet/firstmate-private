@@ -265,6 +265,31 @@ steps[3]{step,status,findings,duration_ms}:
 EOF
 }
 
+run_ci_fix_review_hosted_checks() {  # <branch>
+  cat <<EOF
+run:
+  id: "01RUN"
+  branch: $1
+  status: running
+  awaiting_agent: parked 6h
+  head: "${FM_FAKE_RUN_HEAD:-abc1234}"
+  pr: "https://github.com/o/r/pull/1074"
+  findings: 2 info
+  steps[9]{step,status,findings,duration_ms}:
+    intent,completed,0,0
+    review,completed,0,0
+    test,completed,0,0
+    ci,fix_review,2,0
+gate:
+  step: ci
+  status: fix_review
+  summary: CI failures require manual intervention
+  findings[2]{id,severity,file,action,description}:
+    ci-1,warning,"","","CI check failing: Apply Release Status Label"
+    ci-2,warning,"","","CI check failing: Prepare Dependencies"
+EOF
+}
+
 run_passed() {  # <branch>
   cat <<EOF
 run:
@@ -403,6 +428,7 @@ test_genuine_parked_not_superseded() {
   assert_contains "$out" "source: run-step" "parked -> run-step source"
   assert_contains "$out" "2 finding(s)" "parked includes gate finding count"
   assert_contains "$out" "ask-user" "parked surfaces ask-user finding"
+  assert_not_contains "$out" "hosted CI/check" "review findings are not relabeled as hosted checks"
   assert_not_contains "$out" "superseded" "agreeing parked+needs-decision not flagged stale"
   pass "genuine parked run is not flagged superseded"
 }
@@ -439,6 +465,24 @@ test_gate_block_parked_not_superseded() {
   assert_contains "$out" "1 finding(s)" "gate block wait includes finding count"
   assert_not_contains "$out" "superseded" "gate block wait not flagged stale"
   pass "gate block parked run is not flagged superseded"
+}
+
+test_ci_fix_review_hosted_check_records_are_qualified() {
+  reset_fakes
+  local d; d=$(new_case ci-hosted-checks)
+  make_repo_on_branch "$d/wt" fm/feat-cihosted
+  make_fakebin "$d" >/dev/null
+  fm_write_meta "$d/state/feat-cihosted.meta" "window=fm:fm-feat-cihosted" "worktree=$d/wt" "kind=ship"
+  FM_FAKE_AXI_STATUS="$(run_ci_fix_review_hosted_checks fm/feat-cihosted)"
+  local out; out=$(run_crew_state "$d" feat-cihosted)
+  assert_contains "$out" "state: parked" "ci hosted-check gate -> parked"
+  assert_contains "$out" "source: run-step" "ci hosted-check gate -> run-step source"
+  assert_contains "$out" "hosted CI/check reconciliation" "ci check records identify hosted-check reconciliation"
+  assert_contains "$out" "Apply Release Status Label" "ci check record names release-label check"
+  assert_contains "$out" "Prepare Dependencies" "ci check record names dependency check"
+  assert_contains "$out" "warning check record" "ci check records preserve warning semantics"
+  assert_not_contains "$out" "2 finding(s)" "ci check records must not render as a bare finding count"
+  pass "ci fix-review hosted check records are qualified"
 }
 
 test_ci_ready_done_log_beats_monitoring_run() {
@@ -550,6 +594,22 @@ EOF
   assert_not_contains "$out" "state: done" "pending no-checks marker must not read as done"
   assert_not_contains "$out" "checks green" "pending no-checks marker must not read as checks green"
   pass "pending no-checks ci-monitor marker stays working"
+}
+
+test_ci_monitoring_no_checks_yet_names_hosted_registration_wait() {
+  reset_fakes
+  local d; d=$(new_case ci-nochecks-registering)
+  make_repo_on_branch "$d/wt" fm/feat-ciregistering
+  make_fakebin "$d" >/dev/null
+  fm_write_meta "$d/state/feat-ciregistering.meta" "window=fm:fm-feat-ciregistering" "worktree=$d/wt" "kind=ship"
+  FM_FAKE_AXI_STATUS="$(run_ci_monitoring fm/feat-ciregistering)"
+  FM_FAKE_CI_LOGS="no CI checks reported yet, waiting for checks to register..."
+  local out; out=$(run_crew_state "$d" feat-ciregistering)
+  assert_contains "$out" "state: working" "pending hosted check registration -> working"
+  assert_contains "$out" "source: run-step" "pending hosted check registration -> run-step source"
+  assert_contains "$out" "waiting for hosted CI checks to register" "pending no-checks marker is explicit"
+  assert_not_contains "$out" "validating (running)" "pending no-checks marker is not generic validation"
+  pass "pending hosted check registration is named explicitly"
 }
 
 test_ci_monitoring_still_waiting_stays_working() {
@@ -1315,12 +1375,14 @@ test_stale_blocked_superseded
 test_genuine_parked_not_superseded
 test_scalar_gate_parked_not_superseded
 test_gate_block_parked_not_superseded
+test_ci_fix_review_hosted_check_records_are_qualified
 test_ci_ready_done_log_beats_monitoring_run
 test_ci_monitoring_checks_green_surfaces_done
 test_top_level_ci_checks_green_surfaces_done
 test_ci_monitoring_no_checks_terminal_surfaces_done
 test_ci_monitoring_green_then_rearm_stays_working
 test_ci_monitoring_no_checks_yet_stays_working
+test_ci_monitoring_no_checks_yet_names_hosted_registration_wait
 test_ci_monitoring_still_waiting_stays_working
 test_ci_monitoring_green_then_new_issue_stays_working
 test_ci_ready_done_log_relapse_stays_working
