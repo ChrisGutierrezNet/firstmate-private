@@ -25,6 +25,30 @@ TMP_ROOT=$(fm_test_tmproot fm-daemon-tests)
 FM_DAEMON_PRIMARY_HARNESS=claude
 export FM_DAEMON_PRIMARY_HARNESS
 
+daemon_terminal_wait_fixture() {  # <case-name>
+  local dir state data fakebin
+  dir=$(make_supercase "$1")
+  state="$dir/state"
+  data="$dir/data"
+  fakebin="$dir/fakebin"
+  make_fake_crew_state "$fakebin" >/dev/null
+  mkdir -p "$data" "$dir/wt-termwait" "$dir/wt-recovery"
+  cat > "$data/backlog.md" <<'EOF'
+## In flight
+- [ ] termwait - Terminal failed task blocked-by: recovery (repo: firstmate) (kind: ship)
+- [ ] recovery - Recovery fix (repo: firstmate) (kind: ship)
+
+## Queued
+
+## Done
+EOF
+  printf 'window=sess:fm-termwait\nkind=ship\nworktree=%s\n' "$dir/wt-termwait" > "$state/termwait.meta"
+  printf 'kind=ship\nworktree=%s\n' "$dir/wt-recovery" > "$state/recovery.meta"
+  printf 'failed: no-mistakes validation failed\npaused: blocked on recovery\n' > "$state/termwait.status"
+  printf 'working: fixing the failed validation\n' > "$state/recovery.status"
+  printf '%s\t%s\t%s\t%s\n' "$dir" "$state" "$data" "$fakebin"
+}
+
 test_afk_start_refuses_when_flag_cannot_be_written() {
   local dir state out status
   dir=$(make_supercase afk-start-flag-unwritable)
@@ -218,6 +242,120 @@ test_stale_paused_classifies_pause() {
   out=$(FM_STATE_OVERRIDE="$state" classify_stale "sess:fm-held-w9" "$state")
   case "$out" in pause\|*) ;; *) fail "declared pause did not classify as pause: $out" ;; esac
   pass "paused reasons with captain phrases remain pause-classified"
+}
+
+test_stale_terminal_dependency_wait_classifies_dependency_wait() {
+  local setup dir state data fakebin out
+  setup=$(daemon_terminal_wait_fixture stale-terminal-dependency)
+  IFS=$(printf '\t') read -r dir state data fakebin <<EOF
+$setup
+EOF
+  out=$(FM_DATA_OVERRIDE="$data" FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" \
+    FM_FAKE_CREW_STATE_termwait='state: failed · source: run-step · no-mistakes validation failed' \
+    FM_FAKE_CREW_STATE_recovery='state: working · source: run-step · applying recovery fix' \
+    classify_stale "sess:fm-termwait" "$state")
+  case "$out" in dependency-wait\|*) ;; *) fail "terminal dependency wait did not classify as dependency-wait: $out" ;; esac
+  pass "stale terminal dependency wait self-classifies separately from generic pause"
+}
+
+test_stale_terminal_dependency_wait_missing_proof_escalates() {
+  local setup dir state data fakebin out
+  setup=$(daemon_terminal_wait_fixture stale-terminal-dependency-missing)
+  IFS=$(printf '\t') read -r dir state data fakebin <<EOF
+$setup
+EOF
+  rm -f "$state/recovery.meta"
+  out=$(FM_DATA_OVERRIDE="$data" FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" \
+    FM_FAKE_CREW_STATE_termwait='state: failed · source: run-step · no-mistakes validation failed' \
+    classify_stale "sess:fm-termwait" "$state")
+  case "$out" in escalate\|*lacks\ a\ live\ blocker*) ;; *) fail "missing dependency proof did not escalate: $out" ;; esac
+  pass "stale terminal dependency wait without live proof escalates instead of generic pause"
+}
+
+test_signal_terminal_dependency_wait_surfaces_coalesced_failures() {
+  local setup dir state data fakebin out key
+  setup=$(daemon_terminal_wait_fixture signal-terminal-dependency-coalesced)
+  IFS=$(printf '\t') read -r dir state data fakebin <<EOF
+$setup
+EOF
+  key=$(printf '%s' termwait | tr ':/.' '___')
+  out=$(FM_DATA_OVERRIDE="$data" FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" \
+    FM_FAKE_CREW_STATE_termwait='state: failed · source: run-step · no-mistakes validation failed' \
+    FM_FAKE_CREW_STATE_recovery='state: working · source: run-step · applying recovery fix' \
+    classify_signal "$state/termwait.status" "$state")
+  case "$out" in escalate\|*failed:\ no-mistakes\ validation\ failed*) ;; *) fail "coalesced failed+paused signal did not surface the failure: $out" ;; esac
+  FM_DATA_OVERRIDE="$data" FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" \
+    FM_FAKE_CREW_STATE_termwait='state: failed · source: run-step · no-mistakes validation failed' \
+    FM_FAKE_CREW_STATE_recovery='state: working · source: run-step · applying recovery fix' \
+    handle_wake "signal: $state/termwait.status" "$state"
+  grep -F "failed: no-mistakes validation failed" "$state/.subsuper-escalations" >/dev/null \
+    || fail "coalesced failure was not added to daemon escalations: $(cat "$state/.subsuper-escalations")"
+  [ "$(cat "$state/.subsuper-seen-status-$key" 2>/dev/null || true)" = "failed: no-mistakes validation failed" ] \
+    || fail "coalesced failure did not record the failed line as seen"
+  [ -e "$state/.subsuper-dependency-wait-$key" ] || fail "coalesced dependency wait was not retained for stale suppression"
+  : > "$state/.subsuper-escalations"
+  FM_DATA_OVERRIDE="$data" FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" \
+    FM_FAKE_CREW_STATE_termwait='state: failed · source: run-step · no-mistakes validation failed' \
+    FM_FAKE_CREW_STATE_recovery='state: working · source: run-step · still applying recovery fix' \
+    handle_wake "signal: $state/termwait.status" "$state"
+  [ ! -s "$state/.subsuper-escalations" ] || fail "unchanged coalesced failure re-escalated: $(cat "$state/.subsuper-escalations")"
+  printf 'failed: no-mistakes validation failed\npaused: blocked on recovery\nfailed: regression after retry\npaused: still blocked on recovery\n' > "$state/termwait.status"
+  FM_DATA_OVERRIDE="$data" FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" \
+    FM_FAKE_CREW_STATE_termwait='state: failed · source: run-step · retry failed' \
+    FM_FAKE_CREW_STATE_recovery='state: working · source: run-step · applying recovery fix' \
+    handle_wake "signal: $state/termwait.status" "$state"
+  grep -F "failed: regression after retry" "$state/.subsuper-escalations" >/dev/null \
+    || fail "new coalesced failure did not escalate: $(cat "$state/.subsuper-escalations")"
+  pass "signal classifier surfaces initial and new coalesced dependency-wait failures"
+}
+
+test_handle_wake_dependency_wait_records_marker() {
+  local setup dir state data fakebin key
+  setup=$(daemon_terminal_wait_fixture handle-terminal-dependency)
+  IFS=$(printf '\t') read -r dir state data fakebin <<EOF
+$setup
+EOF
+  FM_DATA_OVERRIDE="$data" FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" \
+    FM_FAKE_CREW_STATE_termwait='state: failed · source: run-step · no-mistakes validation failed' \
+    FM_FAKE_CREW_STATE_recovery='state: working · source: run-step · applying recovery fix' \
+    handle_wake "stale: sess:fm-termwait" "$state"
+  key=$(printf '%s' termwait | tr ':/.' '___')
+  [ -e "$state/.subsuper-dependency-wait-$key" ] || fail "dependency-wait marker was not recorded"
+  [ ! -e "$state/.subsuper-paused-$key" ] || fail "dependency wait was recorded as a generic pause"
+  [ ! -e "$state/.subsuper-stale-$key" ] || fail "dependency wait retained wedge stale tracking"
+  [ ! -s "$state/.subsuper-escalations" ] || fail "dependency wait escalated immediately"
+  pass "handle_wake records terminal dependency waits without generic pause or wedge markers"
+}
+
+test_housekeeping_dependency_wait_invalidated_surfaces() {
+  local setup dir state data fakebin key
+  setup=$(daemon_terminal_wait_fixture housekeeping-terminal-dependency)
+  IFS=$(printf '\t') read -r dir state data fakebin <<EOF
+$setup
+EOF
+  FM_DATA_OVERRIDE="$data" FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" \
+    FM_FAKE_CREW_STATE_termwait='state: failed · source: run-step · no-mistakes validation failed' \
+    FM_FAKE_CREW_STATE_recovery='state: working · source: run-step · applying recovery fix' \
+    handle_wake "stale: sess:fm-termwait" "$state"
+  key=$(printf '%s' termwait | tr ':/.' '___')
+  [ -e "$state/.subsuper-dependency-wait-$key" ] || fail "dependency-wait marker was not recorded before invalidation"
+  cat > "$data/backlog.md" <<'EOF'
+## In flight
+- [ ] termwait - Terminal failed task blocked-by: recovery (repo: firstmate) (kind: ship)
+
+## Queued
+
+## Done
+- [x] recovery - Recovery fix (repo: firstmate) (kind: ship) (done 2026-07-27)
+EOF
+  FM_DATA_OVERRIDE="$data" FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" \
+    FM_FAKE_CREW_STATE_termwait='state: failed · source: run-step · no-mistakes validation failed' \
+    FM_FAKE_CREW_STATE_recovery='state: done · source: run-step · recovery landed' \
+    housekeeping "$state"
+  [ -s "$state/.subsuper-escalations" ] || fail "invalidated dependency wait did not escalate"
+  grep -F "terminal dependency wait no longer valid" "$state/.subsuper-escalations" >/dev/null \
+    || fail "invalidated dependency wait escalation omitted reason: $(cat "$state/.subsuper-escalations")"
+  pass "daemon housekeeping surfaces a dependency wait whose blocker completed"
 }
 
 # handle_wake on a paused stale records a pause marker, drops any pre-existing wedge
@@ -1838,6 +1976,11 @@ test_stale_transient_self_records_marker
 test_stale_diagnostic_wedge_survives_busy_housekeeping
 test_stale_terminal_escalates
 test_stale_paused_classifies_pause
+test_stale_terminal_dependency_wait_classifies_dependency_wait
+test_stale_terminal_dependency_wait_missing_proof_escalates
+test_signal_terminal_dependency_wait_surfaces_coalesced_failures
+test_handle_wake_dependency_wait_records_marker
+test_housekeeping_dependency_wait_invalidated_surfaces
 test_handle_wake_paused_records_pause_marker
 test_handle_wake_paused_signal_records_pause_marker
 test_handle_wake_terminal_signal_clears_pause_tracking

@@ -77,6 +77,213 @@ FM_PAUSE_RESURFACE_SECS_DEFAULT=3600
 FM_CLASSIFY_RESOLVE_VERB_DEFAULT='resolved'
 FM_CLASSIFY_CAPTAIN_HELD_VERB_DEFAULT='captain-held'
 
+_fm_classify_data_dir() {
+  if [ -n "${FM_DATA_OVERRIDE:-}" ]; then
+    printf '%s' "$FM_DATA_OVERRIDE"
+  elif [ -n "${FM_HOME:-}" ]; then
+    printf '%s/data' "$FM_HOME"
+  elif [ -n "${FM_ROOT_OVERRIDE:-}" ]; then
+    printf '%s/data' "$FM_ROOT_OVERRIDE"
+  else
+    printf '%s/../data' "$_FM_CLASSIFY_LIB_DIR"
+  fi
+}
+
+_fm_classify_meta_value() {  # <meta-file> <key>
+  [ -f "$1" ] || return 1
+  grep "^$2=" "$1" 2>/dev/null | tail -1 | cut -d= -f2- || true
+}
+
+_fm_classify_physical_dir() {  # <dir>
+  [ -d "$1" ] || return 1
+  ( cd "$1" 2>/dev/null && pwd -P )
+}
+
+_fm_classify_crew_state_line() {  # <task-id>
+  "$FM_CREW_STATE_BIN" "$1" 2>/dev/null | head -1
+}
+
+_fm_classify_crew_state_value() {  # <crew-state-line>
+  local rest
+  case "$1" in
+    state:\ *) rest=${1#state: }; printf '%s' "${rest%% *}" ;;
+    *) return 1 ;;
+  esac
+}
+
+_fm_classify_crew_state_source() {  # <crew-state-line>
+  local rest sep=' · '
+  case "$1" in
+    *"$sep"source:\ *)
+      rest=${1#*"$sep"source: }
+      printf '%s' "${rest%% *}"
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+_fm_backlog_task_row() {  # <task-id> <state-dir>
+  local task=$1 data backlog
+  data=$(_fm_classify_data_dir)
+  backlog="$data/backlog.md"
+  [ -f "$backlog" ] || return 1
+  printf '%s\n' "$task" | grep -Eq '^[A-Za-z0-9._-]+$' || return 1
+  awk -v wanted="$task" '
+    function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
+    /^##[[:space:]]+/ {
+      section=$0
+      sub(/^##[[:space:]]+/, "", section)
+      section=trim(section)
+      next
+    }
+    {
+      line=$0
+      tmp=line
+      rid=""
+      if (tmp ~ /^[-*][[:space:]]+\[[ xX]\][[:space:]]+/) {
+        sub(/^[-*][[:space:]]+\[[ xX]\][[:space:]]+/, "", tmp)
+        rid=tmp
+        sub(/[[:space:]]+-[[:space:]]+.*/, "", rid)
+      } else if (tmp ~ /^[-*][[:space:]]+\*\*[^*]+\*\*[[:space:]]+-[[:space:]]+/) {
+        sub(/^[-*][[:space:]]+\*\*/, "", tmp)
+        rid=tmp
+        sub(/\*\*[[:space:]]+-[[:space:]]+.*/, "", rid)
+      }
+      if (rid == wanted) {
+        printf "%s\t%s\n", section, line
+        found=1
+        exit
+      }
+    }
+    END { if (!found) exit 1 }
+  ' "$backlog" 2>/dev/null
+}
+
+_fm_backlog_row_is_done() {  # <task-id> <state-dir>
+  local row section line tab
+  tab=$(printf '\t')
+  row=$(_fm_backlog_task_row "$1" "$2") || return 1
+  section=${row%%"$tab"*}
+  line=${row#*"$tab"}
+  [ "$section" = Done ] && return 0
+  case "$line" in
+    "- [x] "*|"- [X] "*) return 0 ;;
+  esac
+  return 1
+}
+
+_fm_backlog_blockers_for_task() {  # <task-id> <state-dir>
+  local row line rest blocker seen='' out='' tab
+  tab=$(printf '\t')
+  row=$(_fm_backlog_task_row "$1" "$2") || return 1
+  line=${row#*"$tab"}
+  rest=$line
+  while :; do
+    case "$rest" in
+      *blocked-by:*) rest=${rest#*blocked-by:} ;;
+      *) break ;;
+    esac
+    rest=${rest#"${rest%%[![:space:]]*}"}
+    blocker=${rest%%[[:space:])]*}
+    blocker=${blocker%,}
+    printf '%s\n' "$blocker" | grep -Eq '^[A-Za-z0-9._-]+$' || return 1
+    case " $seen " in
+      *" $blocker "*) ;;
+      *)
+        seen="$seen $blocker"
+        out="${out}${blocker}"$'\n'
+        ;;
+    esac
+  done
+  [ -n "$out" ] || return 1
+  printf '%s' "$out"
+}
+
+_fm_status_failed_then_paused_wait() {  # <status-file>
+  local f=$1 line verb saw_failed=0 wait=0 pause
+  [ -f "$f" ] || return 1
+  pause=${FM_CLASSIFY_PAUSED_VERB:-$FM_CLASSIFY_PAUSED_VERB_DEFAULT}
+  while IFS= read -r line || [ -n "$line" ]; do
+    [ -n "${line//[[:space:]]/}" ] || continue
+    verb=$(status_line_verb "$line")
+    case "$verb" in
+      failed)
+        saw_failed=1
+        wait=0
+        ;;
+      "$pause")
+        [ "$saw_failed" = 1 ] && wait=1
+        ;;
+      working|done|needs-decision|blocked|resolved|captain-held)
+        wait=0
+        ;;
+    esac
+  done < "$f"
+  [ "$wait" = 1 ]
+}
+
+terminal_dependency_wait_declared() {  # <task-id> <state-dir>
+  _fm_status_failed_then_paused_wait "$2/$1.status"
+}
+
+_fm_signature_cksum() {
+  cksum | cut -d' ' -f1
+}
+
+# Print a stable signature when <task> is a terminal failed validation run that
+# has explicitly yielded to a live backlog blocker. This is notification
+# classification only: fm-crew-state.sh remains authoritative for the task's
+# current state and still reports the failed run-step.
+terminal_dependency_wait_signature() {  # <task-id> <state-dir>
+  local task=$1 state=$2 status meta wt wt_real line st src blockers blocker
+  local bmeta bwt bwt_real bline bst bsrc sig_src open
+  [ -n "$task" ] || return 1
+  status="$state/$task.status"
+  meta="$state/$task.meta"
+  terminal_dependency_wait_declared "$task" "$state" || return 1
+  open=$(status_open_decisions "$status")
+  [ -z "$open" ] || return 1
+  line=$(_fm_classify_crew_state_line "$task" || true)
+  st=$(_fm_classify_crew_state_value "$line" || true)
+  src=$(_fm_classify_crew_state_source "$line" || true)
+  [ "$st" = failed ] && [ "$src" = run-step ] || return 1
+  wt=$(_fm_classify_meta_value "$meta" worktree)
+  wt_real=$(_fm_classify_physical_dir "$wt") || return 1
+  blockers=$(_fm_backlog_blockers_for_task "$task" "$state") || return 1
+  sig_src="task=$task|state=$st:$src|worktree=$wt_real|blockers="
+  while IFS= read -r blocker; do
+    [ -n "$blocker" ] || continue
+    [ "$blocker" != "$task" ] || return 1
+    _fm_backlog_task_row "$blocker" "$state" >/dev/null || return 1
+    ! _fm_backlog_row_is_done "$blocker" "$state" || return 1
+    bmeta="$state/$blocker.meta"
+    [ -f "$bmeta" ] || return 1
+    bwt=$(_fm_classify_meta_value "$bmeta" worktree)
+    bwt_real=$(_fm_classify_physical_dir "$bwt") || return 1
+    [ "$bwt_real" != "$wt_real" ] || return 1
+    open=$(status_open_decisions "$state/$blocker.status")
+    [ -z "$open" ] || return 1
+    bline=$(_fm_classify_crew_state_line "$blocker" || true)
+    bst=$(_fm_classify_crew_state_value "$bline" || true)
+    bsrc=$(_fm_classify_crew_state_source "$bline" || true)
+    [ "$bst" = working ] || return 1
+    case "$bsrc" in run-step|pane) ;; *) return 1 ;; esac
+    sig_src="${sig_src}${blocker}:state=$bst:$bsrc:worktree=$bwt_real;"
+  done <<EOF
+$blockers
+EOF
+  printf 'v1-%s\n' "$(printf '%s' "$sig_src" | _fm_signature_cksum)"
+}
+
+latest_failed_status_line() {  # <status-file>
+  local f=$1 line latest=''
+  [ -e "$f" ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    [ "$(status_line_verb "$line")" = failed ] && latest=$line
+  done < "$f"
+  printf '%s' "$latest"
+}
+
 # Return the last non-blank line of a status file (empty if missing/blank).
 last_status_line() {
   local f=$1

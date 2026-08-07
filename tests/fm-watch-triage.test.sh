@@ -39,6 +39,45 @@ watch_bg() {  # <state> <fakebin> <out> [extra env assignments...]
     FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$@" "$WATCH" > "$out" &
 }
 
+write_terminal_wait_backlog() {  # <data-dir> <task> <blocker>
+  local data=$1 task=$2 blocker=$3
+  mkdir -p "$data"
+  cat > "$data/backlog.md" <<EOF
+## In flight
+- [ ] $task - Terminal failed task blocked-by: $blocker (repo: firstmate) (kind: ship)
+- [ ] $blocker - Recovery fix (repo: firstmate) (kind: ship)
+
+## Queued
+
+## Done
+EOF
+}
+
+prepare_terminal_wait_case() {  # <case-name> <task> <blocker>
+  local dir state data capture task blocker window key pane_hash sig
+  dir=$(make_case "$1")
+  task=$2
+  blocker=$3
+  state="$dir/state"
+  data="$dir/data"
+  capture="$dir/pane.txt"
+  window="test:fm-$task"
+  mkdir -p "$dir/wt-$task" "$dir/wt-$blocker"
+  printf 'idle terminal validation failure awaiting dependency\n' > "$capture"
+  printf 'window=%s\nkind=ship\nharness=pi\nworktree=%s\n' "$window" "$dir/wt-$task" > "$state/$task.meta"
+  printf 'kind=ship\nharness=codex\nworktree=%s\n' "$dir/wt-$blocker" > "$state/$blocker.meta"
+  printf 'failed: no-mistakes validation failed\npaused: blocked on active recovery task %s\n' "$blocker" > "$state/$task.status"
+  printf 'working: repairing the failed validation\n' > "$state/$blocker.status"
+  sig=$(seen_sig "$state/$task.status"); printf '%s' "$sig" > "$state/.seen-${task}_status"
+  sig=$(seen_sig "$state/$blocker.status"); printf '%s' "$sig" > "$state/.seen-${blocker}_status"
+  write_terminal_wait_backlog "$data" "$task" "$blocker"
+  key=$(printf '%s' "$window" | tr ':/.' '___')
+  pane_hash=$(hash_text "idle terminal validation failure awaiting dependency")
+  printf '%s' "$pane_hash" > "$state/.hash-$key"
+  printf '1\n' > "$state/.count-$key"
+  printf '%s\t%s\t%s\t%s\t%s\n' "$dir" "$state" "$data" "$capture" "$window"
+}
+
 # Wait up to <limit> 0.1s ticks while <pid> stays alive; 0 if still alive, 1 if it died.
 wait_live() {
   local pid=$1 limit=${2:-30} i=0
@@ -991,6 +1030,126 @@ test_paused_authoritative_working_preserves_wedge_timer() {
   pass "a paused status overridden by authoritative working preserves its wedge timer and escalates"
 }
 
+test_terminal_dependency_wait_absorbs_repeated_stale() {
+  local setup dir state data capture window fakebin out key pid i round recovery_state
+  setup=$(prepare_terminal_wait_case terminal-dependency-wait termwait recovery)
+  IFS=$(printf '\t') read -r dir state data capture window <<EOF
+$setup
+EOF
+  fakebin="$dir/fakebin"
+  out="$dir/watch.out"
+  key=$(printf '%s' "$window" | tr ':/.' '___')
+
+  round=1
+  while [ "$round" -le 3 ]; do
+    case "$round" in
+      1) recovery_state='state: working · source: run-step · applying recovery fix' ;;
+      2) recovery_state='state: working · source: run-step · still applying recovery fix' ;;
+      *) recovery_state='state: working · source: run-step · validating final recovery fix' ;;
+    esac
+    : > "$out"
+    PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture" \
+      FM_FAKE_TMUX_CURRENT_COMMAND=pi \
+      FM_FAKE_CREW_STATE_termwait='state: failed · source: run-step · no-mistakes validation failed' \
+      FM_FAKE_CREW_STATE_recovery="$recovery_state" \
+      FM_DATA_OVERRIDE="$data" FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" \
+      FM_STALE_ESCALATE_SECS=1 FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+    pid=$!
+    i=0
+    while [ "$i" -lt 40 ] && kill -0 "$pid" 2>/dev/null; do
+      [ -e "$state/.dependency-wait-$key" ] && break
+      sleep 0.1
+      i=$((i + 1))
+    done
+    if ! kill -0 "$pid" 2>/dev/null; then
+      reap "$pid"
+      fail "terminal dependency wait surfaced on round $round instead of absorbing: $(cat "$out")"
+    fi
+    [ -e "$state/.dependency-wait-$key" ] || { reap "$pid"; fail "dependency-wait marker was not recorded"; }
+    [ ! -s "$out" ] || { reap "$pid"; fail "absorbed dependency wait printed a wake reason: $(cat "$out")"; }
+    [ ! -s "$state/.wake-queue" ] || { reap "$pid"; fail "absorbed dependency wait enqueued a wake: $(cat "$state/.wake-queue")"; }
+    [ ! -e "$state/.stale-since-$key" ] || { reap "$pid"; fail "dependency wait started a wedge timer"; }
+    kill -KILL "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+    round=$((round + 1))
+  done
+  pass "an unchanged failed terminal task blocked on a live recovery task is absorbed across repeated stale polls"
+}
+
+test_terminal_dependency_wait_invalidated_surfaces() {
+  local setup dir state data capture window fakebin out key pid i
+  setup=$(prepare_terminal_wait_case terminal-dependency-invalidated termwait recovery)
+  IFS=$(printf '\t') read -r dir state data capture window <<EOF
+$setup
+EOF
+  fakebin="$dir/fakebin"
+  out="$dir/watch.out"
+  key=$(printf '%s' "$window" | tr ':/.' '___')
+
+  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture" \
+    FM_FAKE_TMUX_CURRENT_COMMAND=pi \
+    FM_FAKE_CREW_STATE_termwait='state: failed · source: run-step · no-mistakes validation failed' \
+    FM_FAKE_CREW_STATE_recovery='state: working · source: run-step · applying recovery fix' \
+    FM_DATA_OVERRIDE="$data" FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" \
+    FM_STALE_ESCALATE_SECS=999 FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+  pid=$!
+  i=0
+  while [ "$i" -lt 40 ] && kill -0 "$pid" 2>/dev/null; do
+    [ -e "$state/.dependency-wait-$key" ] && break
+    sleep 0.1
+    i=$((i + 1))
+  done
+  kill -0 "$pid" 2>/dev/null || { reap "$pid"; fail "priming dependency wait surfaced: $(cat "$out")"; }
+  kill -KILL "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+
+  cat > "$data/backlog.md" <<'EOF'
+## In flight
+- [ ] termwait - Terminal failed task blocked-by: recovery (repo: firstmate) (kind: ship)
+
+## Queued
+
+## Done
+- [x] recovery - Recovery fix (repo: firstmate) (kind: ship) (done 2026-07-27)
+EOF
+  : > "$out"
+  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture" \
+    FM_FAKE_TMUX_CURRENT_COMMAND=pi \
+    FM_FAKE_CREW_STATE_termwait='state: failed · source: run-step · no-mistakes validation failed' \
+    FM_FAKE_CREW_STATE_recovery='state: done · source: run-step · recovery landed' \
+    FM_DATA_OVERRIDE="$data" FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" \
+    FM_STALE_ESCALATE_SECS=999 FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+  pid=$!
+  wait_for_exit "$pid" 40 || fail "completed dependency did not surface"
+  grep -F "terminal dependency wait no longer valid" "$out" >/dev/null \
+    || fail "invalidated dependency wake reason was not explicit: $(cat "$out")"
+  pass "a completed blocker breaks dependency-wait suppression"
+}
+
+test_terminal_dependency_wait_new_decision_surfaces() {
+  local setup dir state data capture window fakebin out sig pid
+  setup=$(prepare_terminal_wait_case terminal-dependency-decision termwait recovery)
+  IFS=$(printf '\t') read -r dir state data capture window <<EOF
+$setup
+EOF
+  fakebin="$dir/fakebin"
+  out="$dir/watch.out"
+  printf 'needs-decision [key=review]: choose recovery direction\n' >> "$state/termwait.status"
+  sig=$(seen_sig "$state/termwait.status"); printf '%s' "$sig" > "$state/.seen-termwait_status"
+
+  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture" \
+    FM_FAKE_TMUX_CURRENT_COMMAND=pi \
+    FM_FAKE_CREW_STATE_termwait='state: failed · source: run-step · no-mistakes validation failed' \
+    FM_FAKE_CREW_STATE_recovery='state: working · source: run-step · applying recovery fix' \
+    FM_DATA_OVERRIDE="$data" FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" \
+    FM_STALE_ESCALATE_SECS=999 FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+  pid=$!
+  wait_for_exit "$pid" 40 || fail "new decision on dependency-wait task did not surface"
+  grep -F "choose recovery direction" "$out" >/dev/null \
+    || fail "new decision did not surface its decision summary: $(cat "$out")"
+  pass "a new captain decision on a dependency-wait task still surfaces"
+}
+
 # --- consecutive wedge escalations on the same pane demand deep inspection ----
 # Root cause of the PR #252 incident's ~20 minutes of unnoticed green: each
 # wedge escalation fires, gets classified as "still validating" one poll later
@@ -1832,6 +1991,9 @@ test_secondmate_unpause_clears_pause_tracking
 test_nonterminal_stale_pause_transitions_reclassify_unchanged_hash
 test_nonterminal_paused_rechecks_authoritative_state
 test_paused_authoritative_working_preserves_wedge_timer
+test_terminal_dependency_wait_absorbs_repeated_stale
+test_terminal_dependency_wait_invalidated_surfaces
+test_terminal_dependency_wait_new_decision_surfaces
 test_nonterminal_stale_repairs_missing_or_corrupt_timer
 test_triage_log_size_cap_accepts_spaced_wc_counts
 test_procevent_captured_result_surfaces_proactively

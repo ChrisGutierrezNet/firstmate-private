@@ -336,12 +336,35 @@ _collapse_newlines() {  # <text>
 # summary firstmate would otherwise have to re-read.
 
 classify_signal() {  # <reason-after-colon> <state>
-  local reason=$1 state=$2 f last distilled="" rel="" all_seen=1 task seen
+  local reason=$1 state=$2 f last distilled="" rel="" all_seen=1 task seen dep_sig failed_line
   for f in $reason; do
     [ -e "$f" ] || continue
     last=$(last_status_line "$f")
     [ -n "$last" ] || continue
     distilled="${distilled}$(basename "$f"): ${last} | "
+    case "$f" in
+      *.status)
+        task=$(basename "$f"); task="${task%.status}"
+        if terminal_dependency_wait_declared "$task" "$state"; then
+          dep_sig=$(terminal_dependency_wait_signature "$task" "$state" 2>/dev/null || true)
+          if [ -z "$dep_sig" ]; then
+            rel=1
+            all_seen=0
+            continue
+          fi
+          failed_line=$(latest_failed_status_line "$f")
+          if [ -n "$failed_line" ]; then
+            seen="$state/.subsuper-seen-status-$(_stale_key "$task")"
+            if [ "$(cat "$seen" 2>/dev/null || true)" != "$failed_line" ]; then
+              distilled="${distilled}$(basename "$f"): ${failed_line} | "
+              rel=1
+              all_seen=0
+            fi
+          fi
+          continue
+        fi
+        ;;
+    esac
     status_is_captain_relevant "$last" || continue
     rel=1
     # Dedupe against the catch-all scan: if this status was already escalated
@@ -369,9 +392,18 @@ classify_signal() {  # <reason-after-colon> <state>
 # first sight of a non-terminal stale it returns "self" and the caller records a
 # timestamp marker; persistence is escalated by housekeeping's recheck, not here.
 classify_stale() {  # <window> <state>
-  local win=$1 state=$2 task last seen
+  local win=$1 state=$2 task last seen dep_sig
   task=$(window_to_task "$win" "$state")
   last=$(last_status_line "$state/$task.status")
+  dep_sig=$(terminal_dependency_wait_signature "$task" "$state" 2>/dev/null || true)
+  if [ -n "$dep_sig" ]; then
+    printf 'dependency-wait|terminal failed validation blocked by live dependency: %s' "$last"
+    return
+  fi
+  if terminal_dependency_wait_declared "$task" "$state"; then
+    printf 'escalate|terminal dependency wait lacks a live blocker/custody proof: %s' "$last"
+    return
+  fi
   if [ -n "$last" ] && status_is_paused "$last"; then
     # A DECLARED external-wait pause (fm-classify-lib.sh): an idle pane is EXPECTED,
     # so this is not a wedge. The caller records a pause marker (long re-surface
@@ -464,32 +496,55 @@ pause_marker_remove() {  # <window> <state>
   rm -f "$state/.subsuper-paused-$key"
 }
 
+dependency_wait_marker_record() {  # <window> <state> <signature>
+  local win=$1 state=$2 sig=$3 key
+  key=$(_stale_key "$(window_to_task "$win" "$state")")
+  printf '%s' "$sig" > "$state/.subsuper-dependency-wait-$key"
+}
+
+dependency_wait_marker_remove() {  # <window> <state>
+  local win=$1 state=$2 key
+  key=$(_stale_key "$(window_to_task "$win" "$state")")
+  rm -f "$state/.subsuper-dependency-wait-$key"
+}
+
 clear_pause_tracking() {  # <window> <state>
   local win=$1 state=$2 task key watcher_key
   task=$(window_to_task "$win" "$state")
   key=$(_stale_key "$task")
   watcher_key=$(_stale_key "$win")
   rm -f "$state/.subsuper-paused-$key" "$state/.subsuper-stale-$key" \
+    "$state/.subsuper-dependency-wait-$key" \
     "$state/.paused-$watcher_key" "$state/.paused-rechecked-$watcher_key" "$state/.paused-resurfaced-$watcher_key" \
     "$state/.stale-$watcher_key" "$state/.stale-since-$watcher_key" "$state/.wedge-escalations-$watcher_key"
 }
 
 reconcile_pause_tracking() {  # <window> <state> <last-status-line>
-  local win=$1 state=$2 last=$3 task key marker watcher_key
+  local win=$1 state=$2 last=$3 task key marker watcher_key dep_sig
   task=$(window_to_task "$win" "$state")
   key=$(_stale_key "$task")
   marker="$state/.subsuper-paused-$key"
   watcher_key=$(_stale_key "$win")
-  if status_is_paused "$last"; then
+  dep_sig=$(terminal_dependency_wait_signature "$task" "$state" 2>/dev/null || true)
+  if [ -n "$dep_sig" ]; then
     stale_marker_remove "$win" "$state"
+    pause_marker_remove "$win" "$state"
+    dependency_wait_marker_record "$win" "$state" "$dep_sig"
+  elif terminal_dependency_wait_declared "$task" "$state"; then
+    [ -e "$state/.subsuper-dependency-wait-$key" ] && return
+    clear_pause_tracking "$win" "$state"
+  elif status_is_paused "$last"; then
+    [ -e "$state/.subsuper-dependency-wait-$key" ] && return
+    stale_marker_remove "$win" "$state"
+    dependency_wait_marker_remove "$win" "$state"
     pause_marker_record "$win" "$state"
-  elif [ -e "$marker" ] || [ -e "$state/.paused-$watcher_key" ]; then
+  elif [ -e "$marker" ] || [ -e "$state/.paused-$watcher_key" ] || [ -e "$state/.subsuper-dependency-wait-$key" ]; then
     clear_pause_tracking "$win" "$state"
   fi
 }
 
 migrate_watcher_pause_markers() {  # <state>
-  local state=$1 meta win task key last watcher_key
+  local state=$1 meta win task key last watcher_key watcher_dep dep_marker
   for meta in "$state"/*.meta; do
     [ -e "$meta" ] || continue
     win=$(fm_backend_target_of_meta "$meta")
@@ -497,6 +552,14 @@ migrate_watcher_pause_markers() {  # <state>
     task=$(basename "$meta"); task=${task%.meta}
     key=$(_stale_key "$task")
     watcher_key=$(_stale_key "$win")
+    watcher_dep="$state/.dependency-wait-$watcher_key"
+    dep_marker="$state/.subsuper-dependency-wait-$key"
+    if [ -e "$watcher_dep" ] || [ -e "$dep_marker" ]; then
+      if [ -e "$watcher_dep" ] && [ ! -e "$dep_marker" ]; then
+        cat "$watcher_dep" > "$dep_marker" 2>/dev/null || : > "$dep_marker"
+      fi
+      continue
+    fi
     last=$(last_status_line "$state/$task.status")
     if status_is_paused "$last" || [ -e "$state/.subsuper-paused-$key" ] || [ -e "$state/.paused-$watcher_key" ]; then
       reconcile_pause_tracking "$win" "$state" "$last"
@@ -532,13 +595,25 @@ mark_status_seen() {  # <state> <task> <last-line>
 # seen, so the catch-all scan does not re-escalate the same line within
 # HEARTBEAT_SCAN_SECS. Mirrors classify_signal/classify_stale's relevance test.
 mark_escalated_seen() {  # <kind> <arg> <state>
-  local kind=$1 arg=$2 state=$3 f last task
+  local kind=$1 arg=$2 state=$3 f last task failed_line dep_sig
   case "$kind" in
     signal)
       for f in $arg; do
         [ -e "$f" ] || continue
         last=$(last_status_line "$f")
         [ -n "$last" ] || continue
+        case "$f" in
+          *.status)
+            task=$(basename "$f"); task="${task%.status}"
+            dep_sig=$(terminal_dependency_wait_signature "$task" "$state" 2>/dev/null || true)
+            if [ -n "$dep_sig" ]; then
+              dependency_wait_marker_record "$(window_for_task "$task" "$state" 2>/dev/null || printf '%s' "$task")" "$state" "$dep_sig"
+              failed_line=$(latest_failed_status_line "$f")
+              [ -n "$failed_line" ] && mark_status_seen "$state" "$task" "$failed_line"
+              continue
+            fi
+            ;;
+        esac
         status_is_captain_relevant "$last" || continue
         task=$(basename "$f"); task="${task%.status}"
         mark_status_seen "$state" "$task" "$last"
@@ -957,7 +1032,7 @@ _oldest_line_age() {  # <buf> -> seconds since the oldest buffered item first ar
 #  3) heartbeat scan: every HEARTBEAT_SCAN_SECS, grep state/*.status for a
 #     captain-relevant line the per-wake classifier missed and escalate it.
 housekeeping() {  # <state>
-  local state=$1 now due f key task win marker age last max_defer oldest pause_secs
+  local state=$1 now due f key task win marker age last max_defer oldest pause_secs dep_sig
   now=$(_now)
   migrate_watcher_pause_markers "$state"
 
@@ -1017,6 +1092,30 @@ housekeeping() {  # <state>
       *) escalate_add "$state" "stale persisted ${age}s (possible wedge): $win"
          stale_marker_remove "$win" "$state" ;;
     esac
+  done
+
+  # (2a) terminal dependency waits are terminal failed runs parked behind a live
+  # blocker. They must not decay into generic delayed-pause or wedge digests
+  # while the proof is unchanged, but any proof loss or blocker change surfaces.
+  for marker in "$state"/.subsuper-dependency-wait-*; do
+    [ -e "$marker" ] || continue
+    key="${marker##*.subsuper-dependency-wait-}"
+    win=$(window_for_task "$key" "$state" 2>/dev/null || true)
+    if [ -z "$win" ]; then
+      rm -f "$marker"
+      continue
+    fi
+    task=$(window_to_task "$win" "$state")
+    dep_sig=$(terminal_dependency_wait_signature "$task" "$state" 2>/dev/null || true)
+    if [ -z "$dep_sig" ]; then
+      rm -f "$marker"
+      escalate_add "$state" "stale: $win (terminal dependency wait no longer valid - recheck blocker/custody)"
+      continue
+    fi
+    if [ "$(cat "$marker" 2>/dev/null || true)" != "$dep_sig" ]; then
+      printf '%s' "$dep_sig" > "$marker"
+      escalate_add "$state" "stale: $win (terminal dependency wait changed - recheck blocker/custody for $task)"
+    fi
   done
 
   # (2b) pause re-surface recheck. A DECLARED external-wait pause idles by design,
@@ -1200,7 +1299,7 @@ is_wake_reason() {  # <reason>
 # --- dispatch one wake reason to self-handle or escalate --------------------
 # Side effects: logging, marker records, escalation buffer appends.
 handle_wake() {  # <reason> <state>
-  local reason=$1 state=$2 decision action distilled task last stale_detail
+  local reason=$1 state=$2 decision action distilled task last stale_detail dep_sig
   local kind="" arg=""
   if should_force_self "$reason"; then
     log "wake force-self (FM_INJECT_SKIP): $reason"
@@ -1232,6 +1331,16 @@ handle_wake() {  # <reason> <state>
       [ "$kind" = "stale" ] && stale_marker_remove "$arg" "$state"
       mark_escalated_seen "$kind" "$arg" "$state"
       [ "${FM_ESCALATE_BATCH_SECS:-$ESCALATE_BATCH_SECS_DEFAULT}" -le 0 ] && { escalate_flush "$state" || true; }
+      ;;
+    dependency-wait)
+      if [ "$kind" = "stale" ]; then
+        task=$(window_to_task "$arg" "$state")
+        dep_sig=$(terminal_dependency_wait_signature "$task" "$state" 2>/dev/null || true)
+        [ -n "$dep_sig" ] && dependency_wait_marker_record "$arg" "$state" "$dep_sig"
+        stale_marker_remove "$arg" "$state"
+        pause_marker_remove "$arg" "$state"
+      fi
+      log "self-handle (terminal dependency wait): $reason -> $distilled"
       ;;
     pause)
       # Declared external-wait pause: record a pause marker (long re-surface

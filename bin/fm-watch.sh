@@ -360,27 +360,71 @@ clear_pause_state() {  # <window>
   rm -f "$STATE/.paused-$key" "$STATE/.paused-rechecked-$key" "$STATE/.paused-resurfaced-$key"
 }
 
+clear_dependency_wait_tracking() {  # <window>
+  local win=$1 key
+  key=${win//:/_}
+  key=${key//\//_}
+  key=${key//./_}
+  rm -f "$STATE/.dependency-wait-$key"
+}
+
 clear_pause_tracking() {  # <window>
   local win=$1 key
   key=${win//:/_}
   key=${key//\//_}
   key=${key//./_}
   clear_pause_state "$win"
+  clear_dependency_wait_tracking "$win"
   rm -f "$STATE/.stale-$key" "$STATE/.stale-since-$key" "$STATE/.wedge-escalations-$key"
+}
+
+# Absorb an idle terminal failed run that has explicitly yielded to a live
+# recovery task in the durable backlog. The task remains `failed` in
+# fm-crew-state.sh; this only suppresses repeated stopped-pane notifications
+# while the dependency proof remains unchanged.
+handle_dependency_wait_stale() {  # <window> <task> <hash> <signature>
+  local win=$1 task=$2 h=$3 sig=$4 key sf df old reason
+  key=$(printf '%s' "$win" | tr ':/.' '___')
+  sf="$STATE/.stale-$key"
+  df="$STATE/.dependency-wait-$key"
+  old=$(cat "$df" 2>/dev/null || true)
+  printf '%s' "$h" > "$sf"
+  rm -f "$STATE/.stale-since-$key" "$STATE/.wedge-escalations-$key"
+  clear_pause_state "$win"
+  if [ -n "$old" ] && [ "$old" != "$sig" ]; then
+    printf '%s' "$sig" > "$df"
+    reason="stale: $win (terminal dependency wait changed - recheck blocker/custody for $task)"
+    fm_wake_append stale "$win" "$reason" || exit 1
+    wake "$reason"
+  fi
+  printf '%s' "$sig" > "$df"
+  triage_log "absorbed stale (terminal dependency wait, live blocker accounted): $win"
 }
 
 # Reconcile a declared pause or captain-held status with authoritative crew state.
 # Only a confidently dead ordinary crew may recover paused classification after
 # fm-crew-state has fallen back to stopped or unknown.
 pause_state_class() {  # <window> <task>
-  local win=$1 task=$2 key last recheck_file class agent_alive
+  local win=$1 task=$2 key last recheck_file class agent_alive dep_sig
   key=${win//:/_}
   key=${key//\//_}
   key=${key//./_}
   last=$(last_status_line "$STATE/$task.status")
   recheck_file="$STATE/.paused-rechecked-$key"
+  dep_sig=$(terminal_dependency_wait_signature "$task" "$STATE" 2>/dev/null || true)
+  if [ -n "$dep_sig" ]; then
+    printf 'dependency-wait:%s' "$dep_sig"
+    return
+  fi
+  if terminal_dependency_wait_declared "$task" "$STATE"; then
+    rm -f "$recheck_file"
+    clear_dependency_wait_tracking "$win"
+    printf 'none'
+    return
+  fi
   if ! status_is_paused_or_captain_held "$last"; then
     rm -f "$recheck_file"
+    clear_dependency_wait_tracking "$win"
     crew_absorb_class "$task"
     return
   fi
@@ -418,10 +462,11 @@ pause_state_class() {  # <window> <task>
   printf '%s' "$class"
 }
 
-surface_nonterminal_stale() {  # <window> <hash>
-  local win=$1 h=$2 key task last
+surface_nonterminal_stale() {  # <window> <hash> [reason]
+  local win=$1 h=$2 reason=${3:-} key task last
+  [ -n "$reason" ] || reason="stale: $win"
   key=$(printf '%s' "$win" | tr ':/.' '___')
-  fm_wake_append stale "$win" "stale: $win" || exit 1
+  fm_wake_append stale "$win" "$reason" || exit 1
   printf '%s' "$h" > "$STATE/.stale-$key"
   rm -f "$STATE/.stale-since-$key"
   task=$(window_to_task "$win" "$STATE")
@@ -433,7 +478,7 @@ surface_nonterminal_stale() {  # <window> <hash>
   else
     rm -f "$STATE/.paused-$key" "$STATE/.paused-rechecked-$key" "$STATE/.paused-resurfaced-$key"
   fi
-  wake "stale: $win"
+  wake "$reason"
 }
 
 # Check and heartbeat cadence must survive actionable exits and restarts: the
@@ -986,7 +1031,9 @@ EOF
         # The pane is idle/stale at hash $h. Triage decides whether this wakes
         # firstmate. Detection itself is unchanged from above.
         if [ "$kind" = secondmate ]; then
-          case "$(pause_state_class "$w" "$task")" in
+          pclass=$(pause_state_class "$w" "$task")
+          case "$pclass" in
+            dependency-wait:*) handle_dependency_wait_stale "$w" "$task" "$h" "${pclass#dependency-wait:}" ;;
             paused) handle_paused_stale "$w" "$task" "$h" ;;
             *)      clear_pause_tracking "$w" ;;
           esac
@@ -1051,12 +1098,16 @@ EOF
           #     wait out the timer.
           if [ "$(cat "$sf" 2>/dev/null || true)" != "$h" ]; then
             task=$(window_to_task "$w" "$STATE")
-            case "$(pause_state_class "$w" "$task")" in
+            pclass=$(pause_state_class "$w" "$task")
+            case "$pclass" in
               working)
                 clear_pause_tracking "$w"
                 printf '%s' "$h" > "$sf"
                 date +%s > "$ssf"
                 triage_log "absorbed non-terminal stale (provably working): $w"
+                ;;
+              dependency-wait:*)
+                handle_dependency_wait_stale "$w" "$task" "$h" "${pclass#dependency-wait:}"
                 ;;
               paused)
                 handle_paused_stale "$w" "$task" "$h"
@@ -1067,9 +1118,19 @@ EOF
             esac
           else
             task=$(window_to_task "$w" "$STATE")
+            dep_sig=$(terminal_dependency_wait_signature "$task" "$STATE" 2>/dev/null || true)
+            if [ -e "$STATE/.dependency-wait-$key" ]; then
+              if [ -n "$dep_sig" ]; then
+                handle_dependency_wait_stale "$w" "$task" "$h" "$dep_sig"
+                continue
+              fi
+              surface_nonterminal_stale "$w" "$h" "stale: $w (terminal dependency wait no longer valid - recheck blocker/custody)"
+            fi
             if [ -e "$pf" ] || status_is_paused_or_captain_held "$(last_status_line "$STATE/$task.status")"; then
-              case "$(pause_state_class "$w" "$task")" in
+              pclass=$(pause_state_class "$w" "$task")
+              case "$pclass" in
                 paused)  handle_paused_stale "$w" "$task" "$h" ;;
+                dependency-wait:*) handle_dependency_wait_stale "$w" "$task" "$h" "${pclass#dependency-wait:}" ;;
                 working) clear_pause_state "$w"
                          printf '%s' "$h" > "$sf"
                          wedge_timer_check "$w" "$ssf" "non-terminal stale (provably working after a declared pause)" "$ewf"
@@ -1104,7 +1165,9 @@ EOF
       fi
       task=$(window_to_task "$w" "$STATE")
       if ! afk_present && status_is_paused_or_captain_held "$(last_status_line "$STATE/$task.status")" && [ "$busy_now" -ne 0 ]; then
-        case "$(pause_state_class "$w" "$task")" in
+        pclass=$(pause_state_class "$w" "$task")
+        case "$pclass" in
+          dependency-wait:*) handle_dependency_wait_stale "$w" "$task" "$h" "${pclass#dependency-wait:}" ;;
           paused) handle_paused_stale "$w" "$task" "$h" ;;
           *)      clear_pause_tracking "$w" ;;
         esac
