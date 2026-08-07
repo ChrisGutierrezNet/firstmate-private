@@ -231,8 +231,9 @@ Teardown is fail-closed for ship worktrees: dirty worktrees refuse, and committe
 
 ## Continuous operations
 
+`bin/fm-continuous-ops-github.sh` owns GitHub discovery, candidate classification, source freshness, and tasks-axi queue admission for configured remote-backed projects.
 `bin/fm-continuous-ops-lib.sh` owns the minimal continuous-pull mechanism after cleanup.
-It asks the selected compatible `tasks-axi` backend for `ready` work, counts home-local capacity from durable task metadata and current-code-matched no-mistakes state, then writes or clears one private marker under `state/`.
+It first lets the GitHub owner refresh on its bounded cadence, then asks the selected compatible `tasks-axi` backend for `ready` work, counts home-local capacity from durable task metadata and current-code-matched no-mistakes state, then writes or clears one private marker under `state/`.
 The marker queues one deduplicated `check` wake when the ready set newly needs action, and the existing supervision predicate treats that marker like other work requiring a live cycle.
 It does not choose the next item, route to a project or secondmate, decide delivery mode, select dispatch profiles, merge, deploy, or bypass any authority boundary.
 

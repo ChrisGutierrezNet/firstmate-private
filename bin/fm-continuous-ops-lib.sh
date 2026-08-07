@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
-# Continuous Operations v1 helper.
+# Continuous Operations helper.
 #
 # This file is the single owner of the durable "ready backlog work + idle
-# capacity" marker. It deliberately does not select tasks, route work, spawn
-# workers, or decide authority. It only evaluates the configured tasks-axi
-# backend's own `ready` answer, compares it with the standing capacity limits,
-# writes or clears one home-local marker, and queues one deduplicated actionable
-# wake when a new ready transition needs supervisor action.
+# capacity" marker. GitHub discovery and queue admission are owned by
+# bin/fm-continuous-ops-github.sh, which may materialize proven Ready issues
+# into the local tasks-axi backlog before this helper evaluates the configured
+# backend's own `ready` answer. This helper deliberately does not select tasks,
+# route work, spawn workers, or decide authority. It compares ready backlog work
+# with the standing capacity limits, writes or clears one home-local marker, and
+# queues one deduplicated actionable wake when a new ready transition needs
+# supervisor action.
 # It also owns the effective-metadata filter used by supervision counters:
 # when multiple metadata rows point at one reused worktree, and that worktree's
 # current branch matches exactly one sibling task id, older duplicate rows are
@@ -38,6 +41,8 @@ FM_CONTINUOUS_OPS_WAKE_KEY=continuous-ops-ready
 FM_CONTINUOUS_OPS_WORKER_LIMIT=${FM_CONTINUOUS_OPS_WORKER_LIMIT:-6}
 FM_CONTINUOUS_OPS_LOCAL_CERT_LIMIT=${FM_CONTINUOUS_OPS_LOCAL_CERT_LIMIT:-2}
 FM_CONTINUOUS_OPS_CREW_STATE_BIN="${FM_CONTINUOUS_OPS_CREW_STATE_BIN:-$FM_CONTINUOUS_OPS_DIR/fm-crew-state.sh}"
+FM_CONTINUOUS_OPS_GITHUB_BIN="${FM_CONTINUOUS_OPS_GITHUB_BIN:-$FM_CONTINUOUS_OPS_DIR/fm-continuous-ops-github.sh}"
+FM_CONTINUOUS_OPS_GITHUB_STATUS="${FM_CONTINUOUS_OPS_GITHUB_STATUS:-$STATE/.continuous-ops-github.status}"
 
 case "$FM_CONTINUOUS_OPS_WORKER_LIMIT" in ''|*[!0-9]*|0) FM_CONTINUOUS_OPS_WORKER_LIMIT=6 ;; esac
 case "$FM_CONTINUOUS_OPS_LOCAL_CERT_LIMIT" in ''|*[!0-9]*|0) FM_CONTINUOUS_OPS_LOCAL_CERT_LIMIT=2 ;; esac
@@ -50,6 +55,24 @@ FM_CONTINUOUS_OPS_LOCAL_CERT_ACTIVE=0
 FM_CONTINUOUS_OPS_WORKER_IDLE=false
 FM_CONTINUOUS_OPS_LOCAL_CERT_IDLE=false
 FM_CONTINUOUS_OPS_PAYLOAD=
+
+fm_continuous_ops_github_status_get() {  # <key> [state-dir]
+  local key=$1 status
+  status="${2:-$STATE}/.continuous-ops-github.status"
+  [ -f "$status" ] && [ ! -L "$status" ] || return 0
+  grep "^$key=" "$status" 2>/dev/null | tail -1 | cut -d= -f2- || true
+}
+
+fm_continuous_ops_github_refresh() {  # <reason>
+  local reason=$1
+  [ "${FM_CONTINUOUS_OPS_GITHUB_DISABLE:-0}" != 1 ] || return 0
+  [ -x "$FM_CONTINUOUS_OPS_GITHUB_BIN" ] || return 0
+  if [ "${FM_CONTINUOUS_OPS_GITHUB_FORCE:-0}" = 1 ]; then
+    "$FM_CONTINUOUS_OPS_GITHUB_BIN" refresh --force --reason "$reason" >/dev/null 2>&1
+  else
+    "$FM_CONTINUOUS_OPS_GITHUB_BIN" refresh --reason "$reason" >/dev/null 2>&1
+  fi
+}
 
 fm_continuous_ops_meta_get() {  # <meta> <key>
   local meta=$1 key=$2
@@ -299,6 +322,12 @@ fm_continuous_ops_refresh() {  # [reason]
   local reason=${1:-refresh} existing_sig ready_status
   mkdir -p "$STATE"
 
+  fm_continuous_ops_github_refresh "$reason" || {
+    if [ "${FM_CONTINUOUS_OPS_QUIET:-0}" != 1 ]; then
+      printf 'Continuous ops: GitHub candidate discovery is unknown; preserving local ready evaluation and inspect %s.\n' "$FM_CONTINUOUS_OPS_GITHUB_STATUS" >&2
+    fi
+  }
+
   fm_continuous_ops_read_ready
   ready_status=$?
   case "$ready_status" in
@@ -347,8 +376,26 @@ fm_continuous_ops_reconcile_existing() {
 }
 
 fm_continuous_ops_print_section() {
-  local count items workers worker_limit cert cert_limit payload
-  fm_continuous_ops_marker_exists "$STATE" || return 1
+  local count items workers worker_limit cert cert_limit payload gh_state gh_reason gh_ready gh_unknown gh_ledger
+  if ! fm_continuous_ops_marker_exists "$STATE"; then
+    gh_state=$(fm_continuous_ops_github_status_get state "$STATE")
+    case "$gh_state" in
+      unknown)
+        gh_reason=$(fm_continuous_ops_github_status_get reason "$STATE")
+        gh_ready=$(fm_continuous_ops_github_status_get ready "$STATE")
+        gh_unknown=$(fm_continuous_ops_github_status_get unknown "$STATE")
+        gh_ledger=$(fm_continuous_ops_github_status_get ledger "$STATE")
+        printf 'CONTINUOUS OPS (GitHub candidate discovery):\n'
+        printf 'eligibility: unknown'
+        [ -n "$gh_reason" ] && printf ' (%s)' "$gh_reason"
+        printf '\n'
+        printf 'ready: %s item(s), unknown: %s candidate(s)\n' "${gh_ready:-0}" "${gh_unknown:-0}"
+        [ -n "$gh_ledger" ] && printf 'ledger: %s\n' "$gh_ledger"
+        return 0
+        ;;
+    esac
+    return 1
+  fi
   count=$(fm_continuous_ops_marker_get ready_count)
   items=$(fm_continuous_ops_marker_get ready_items)
   workers=$(fm_continuous_ops_marker_get ordinary_workers)

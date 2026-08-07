@@ -113,7 +113,7 @@ state/               volatile runtime signals; gitignored
   x-poll.error x-poll.claim-error  generated Relay and offer-claim diagnostic dedupe markers
   .wake-queue        durable queued wakes: epoch<TAB>seq<TAB>kind<TAB>key<TAB>payload
   .<id>.open-decisions-cursor  per-task byte cursor and folded open-decision set bounding the OPEN DECISIONS scan's cost to new status-log appends; written only by fm-classify-lib.sh's status_open_decisions_incremental, removed by teardown, safe to delete (forces one full re-fold)
-  .continuous-ops-ready  durable ready-work-plus-idle-capacity marker owned by bin/fm-continuous-ops-lib.sh; its presence keeps supervision required until refreshed away
+  .continuous-ops-ready .continuous-ops-github.*  durable continuous-operations marker, GitHub-candidate ledger, freshness status, and admission records owned by bin/fm-continuous-ops-lib.sh and bin/fm-continuous-ops-github.sh
   .afk               durable away-mode flag; present = sub-supervisor may inject escalations (set by /afk, cleared on user return)
   .watch.lock .wake-queue.lock watcher singleton and queue serialization locks
   .claude-autoarm.lock .claude-autoarm-epoch .claude-autoarm-failure-notified .claude-autoarm-failure-alarmed .turnend-claude-blocks .turnend-claude-blocks.lock   Claude Stop auto-arm single-flight, epoch, failure-episode, attended-alarm, guard-budget, and budget-lock records; never touch
@@ -473,7 +473,7 @@ When a main-side thread such as a pending captain decision or relay reminder is 
 Unresolved decisions discovered by investigations or visual reviews follow `decision-hold-lifecycle`, which owns their mandatory backlog lifecycle.
 Update the backlog on every dispatch, completion, and decision for a work item.
 Re-evaluate queued work after every teardown and heartbeat, dispatching items only when dependencies and time gates have cleared.
-Compatible tasks-axi homes also use `bin/fm-continuous-ops-lib.sh` to make a ready-plus-idle-capacity condition durable and supervisor-actionable without selecting the next task itself.
+Compatible tasks-axi homes also use `bin/fm-continuous-ops-github.sh` and `bin/fm-continuous-ops-lib.sh` to discover proven GitHub Ready work, materialize it through tasks-axi, and make a ready-plus-idle-capacity condition durable and supervisor-actionable without selecting the next task itself.
 
 `.tasks.toml`, `docs/configuration.md`, and current `tasks-axi --help` own the backlog schema, compatibility, retention, and routine command syntax.
 Use compatible `tasks-axi` when the configured backend selects it and the documented manual path otherwise; keep only the configured recent Done entries.

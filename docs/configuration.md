@@ -45,6 +45,16 @@ Set the local, gitignored `config/backlog-backend` file to `manual` to force man
 Absent or `tasks-axi` selects the default tasks-axi backend.
 The file format is unchanged in both modes; tasks-axi and manual edits produce the same `## In flight`, `## Queued`, and `## Done` sections.
 
+## Continuous Operations GitHub discovery (config/continuous-ops-github-projects)
+
+`bin/fm-continuous-ops-github.sh` owns GitHub candidate discovery, source freshness, ledger state, and tasks-axi queue admission.
+The optional local, gitignored `config/continuous-ops-github-projects` file narrows or enriches which remote-backed projects are scanned.
+Each non-empty, non-comment line is whitespace separated: `<project-name> [repo=<owner/name>] [roadmap=<owner>/<number>] [default_branch=<branch>]`.
+When the file is absent, the scanner considers every `data/projects.md` entry whose `projects/<name>` clone has a GitHub origin.
+When `roadmap=` is present, that Roadmap is required evidence for the project; an inaccessible or partial Roadmap makes eligibility unknown rather than silently falling back to issue counts.
+The scanner never mutates GitHub, never spawns workers, and never dispatches directly.
+It only materializes proven, unclaimed Ready issues into `data/backlog.md` through `tasks-axi add`; `bin/fm-continuous-ops-lib.sh` still owns the durable ready-plus-idle marker and wake.
+
 ## Runtime backend (config/backend / FM_BACKEND)
 
 For spawn-capable adapters, the runtime session-provider backend controls where task windows/endpoints are created, captured, sent to, watched, and killed.

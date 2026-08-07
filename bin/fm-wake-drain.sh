@@ -88,8 +88,22 @@ EOF
   printf "OPEN DECISIONS: close one by answering it: bin/fm-send.sh <task> --resolve-key <key> '<answer>'\n"
 }
 
-print_continuous_ops_section() {
-  fm_continuous_ops_refresh_quiet "wake-drain" || true
+continuous_ops_wake_rows_require_fresh_scan() {  # <raw-wake-rows>
+  awk -F '\t' '
+    $3 == "check" && $5 ~ /(^|: )merged$/ { found = 1 }
+    $3 == "signal" && $4 ~ /\.status$/ && $5 ~ /^(done|resolved):/ { found = 1 }
+    END { exit found ? 0 : 1 }
+  ' <<EOF
+$1
+EOF
+}
+
+print_continuous_ops_section() {  # [raw-wake-rows]
+  if [ -n "${1:-}" ] && continuous_ops_wake_rows_require_fresh_scan "$1"; then
+    FM_CONTINUOUS_OPS_GITHUB_FORCE=1 fm_continuous_ops_refresh_quiet "wake-drain:event" || true
+  else
+    fm_continuous_ops_refresh_quiet "wake-drain" || true
+  fi
   fm_continuous_ops_print_section || true
 }
 
@@ -146,7 +160,7 @@ DRAIN_LOCK_HELD=false
 # Raw output and queue deletion are authoritative. Everything below is
 # best-effort and cannot restore, duplicate, hide, or fail the consumed rows.
 (fm_wake_print_annotations "$RAW_ROWS") || true
-(print_continuous_ops_section) || true
+(print_continuous_ops_section "$RAW_ROWS") || true
 (print_open_decisions_section) || true
 assert_watcher_liveness
 exit 0

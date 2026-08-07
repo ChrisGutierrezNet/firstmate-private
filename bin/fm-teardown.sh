@@ -2545,5 +2545,5 @@ fi
 echo "teardown $ID complete (window $T, worktree $WT)"
 backlog_refresh_reminder
 if [ "$KIND" != secondmate ]; then
-  fm_continuous_ops_refresh "teardown:$ID" || true
+  FM_CONTINUOUS_OPS_GITHUB_FORCE=1 fm_continuous_ops_refresh "teardown:$ID" || true
 fi
