@@ -126,6 +126,27 @@ fm_continuous_ops_meta_is_stale_reused_worktree() {  # <meta> [state-dir]
   return 1
 }
 
+fm_continuous_ops_reused_worktree_branch_owner_meta() {  # <meta> [state-dir]
+  local meta=$1 state=${2:-$STATE} worktree branch peer peer_worktree peer_id
+  [ -f "$meta" ] && [ ! -L "$meta" ] || return 1
+  worktree=$(fm_continuous_ops_meta_get "$meta" worktree)
+  [ -n "$worktree" ] && [ -d "$worktree" ] || return 1
+  branch=$(fm_continuous_ops_worktree_branch "$worktree" || true)
+  [ -n "$branch" ] || return 1
+  for peer in "$state"/*.meta; do
+    [ -f "$peer" ] && [ ! -L "$peer" ] || continue
+    [ "$peer" != "$meta" ] || continue
+    peer_worktree=$(fm_continuous_ops_meta_get "$peer" worktree)
+    [ "$peer_worktree" = "$worktree" ] || continue
+    peer_id=$(basename "$peer" .meta)
+    if fm_continuous_ops_branch_matches_id "$branch" "$peer_id"; then
+      printf '%s\n' "$peer"
+      return 0
+    fi
+  done
+  return 1
+}
+
 fm_continuous_ops_marker_path() {  # [state-dir]
   local state=${1:-$STATE}
   printf '%s/.continuous-ops-ready\n' "$state"
@@ -289,6 +310,25 @@ fm_continuous_ops_state_counts_active_worker() {  # <fm-crew-state line> <status
   [ -z "$line" ] || [ "$state" = unknown ]
 }
 
+fm_continuous_ops_state_is_working_worker() {  # <fm-crew-state line>
+  case "$1" in
+    state:\ working*) return 0 ;;
+  esac
+  return 1
+}
+
+fm_continuous_ops_stale_reused_branch_owner_active() {  # <stale-meta> <state-dir>
+  local meta=$1 state=${2:-$STATE} owner owner_id owner_kind owner_line owner_status
+  owner=$(fm_continuous_ops_reused_worktree_branch_owner_meta "$meta" "$state") || return 1
+  owner_id=$(basename "$owner" .meta)
+  owner_kind=$(fm_continuous_ops_meta_get "$owner" kind)
+  [ -n "$owner_kind" ] || owner_kind=ship
+  [ "$owner_kind" = secondmate ] && return 1
+  owner_status="$state/$owner_id.status"
+  owner_line=$("$FM_CONTINUOUS_OPS_CREW_STATE_BIN" "$owner_id" 2>/dev/null || true)
+  fm_continuous_ops_state_counts_active_worker "$owner_line" "$owner_status"
+}
+
 fm_continuous_ops_capacity_read() {
   local meta id kind mode line status_log
   FM_CONTINUOUS_OPS_WORKERS=0
@@ -297,13 +337,16 @@ fm_continuous_ops_capacity_read() {
 
   for meta in "$STATE"/*.meta; do
     [ -f "$meta" ] && [ ! -L "$meta" ] || continue
-    fm_continuous_ops_meta_is_stale_reused_worktree "$meta" "$STATE" && continue
     kind=$(fm_continuous_ops_meta_get "$meta" kind)
     [ -n "$kind" ] || kind=ship
     [ "$kind" = secondmate ] && continue
     id=$(basename "$meta" .meta)
     status_log="$STATE/$id.status"
     line=$("$FM_CONTINUOUS_OPS_CREW_STATE_BIN" "$id" 2>/dev/null || true)
+    if fm_continuous_ops_meta_is_stale_reused_worktree "$meta" "$STATE"; then
+      fm_continuous_ops_state_is_working_worker "$line" || continue
+      fm_continuous_ops_stale_reused_branch_owner_active "$meta" "$STATE" && continue
+    fi
     fm_continuous_ops_state_counts_active_worker "$line" "$status_log" || continue
     FM_CONTINUOUS_OPS_WORKERS=$((FM_CONTINUOUS_OPS_WORKERS + 1))
     mode=$(fm_continuous_ops_meta_get "$meta" mode)

@@ -500,6 +500,35 @@ test_reused_stale_binding_does_not_double_count_survivor() {
   pass "reused-copy stale metadata does not double count the surviving owner"
 }
 
+test_reused_worktree_filter_preserves_active_run_step_owner() {
+  local dir state reused
+  dir=$(make_case reused-active-run-step)
+  state=$(state_of "$dir")
+  reused="$dir/reused-slot-19"
+  make_worktree_branch "$reused" fm/old-19-record
+  write_meta "$dir" old-19-record \
+    "window=fm:old-19-record" "worktree=$reused" "project=$dir/project" \
+    "harness=codex" "kind=ship" "mode=no-mistakes"
+  write_meta "$dir" social-depot-ci-adoption \
+    "window=fm:social-depot-ci-adoption" "worktree=$reused" "project=$dir/project" \
+    "harness=codex" "kind=ship" "mode=no-mistakes"
+  write_worker_meta "$dir" issue-726-agent-draft-review-split no-mistakes
+  write_worker_meta "$dir" issue-809-split-ticket-quick-tagging no-mistakes
+  printf 'done: old /19 owner already terminal\n' > "$state/old-19-record.status"
+  printf 'working: No Mistakes CI fix is running\n' > "$state/social-depot-ci-adoption.status"
+  printf 'needs-decision: [key=fixture] parked on review evidence\n' > "$state/issue-726-agent-draft-review-split.status"
+  printf 'done: committed split-ticket quick tagging\n' > "$state/issue-809-split-ticket-quick-tagging.status"
+  run_refresh "$dir" "ready-a" reused-active ready "social-depot-ci-adoption" "" \
+    "issue-726-agent-draft-review-split issue-809-split-ticket-quick-tagging" \
+    "old-19-record" >/dev/null
+  assert_present "$state/.continuous-ops-ready" "active reused-slot worker should leave capacity visible"
+  assert_grep "active_workers=1" "$state/.continuous-ops-ready" \
+    "active run-step owner was excluded or parked/done rows were counted"
+  assert_grep "local_cert_active=1" "$state/.continuous-ops-ready" \
+    "active run-step owner did not consume local certification"
+  pass "reused-worktree filtering preserves an active run-step owner"
+}
+
 test_no_ready_work_emits_no_dispatch_request() {
   local dir state
   dir=$(make_case no-ready)
@@ -548,5 +577,6 @@ test_hosted_waits_are_workers_not_local_certification
 test_two_local_validations_consume_local_certification_limit
 test_unknown_live_ownership_is_conservative_but_dead_terminal_is_not
 test_reused_stale_binding_does_not_double_count_survivor
+test_reused_worktree_filter_preserves_active_run_step_owner
 test_no_ready_work_emits_no_dispatch_request
 test_over_limit_legacy_marker_does_not_claim_dispatch_capacity
