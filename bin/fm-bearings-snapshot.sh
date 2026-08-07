@@ -228,15 +228,19 @@ EOF
     for repo in $repos; do
       if [ "$ALL_PR_REPOS" != 1 ] && [ "$nrepos" -ge "$FM_BEARINGS_PR_REPOS" ]; then break; fi
       nrepos=$((nrepos + 1))
-      out=$(gh_bounded pr list --repo "$repo" --state open --limit "$pr_fetch_limit" \
-        --json number,title,url,headRefName,reviewDecision,mergeable,statusCheckRollup 2>/dev/null) \
-        || { nwarn=$((nwarn + 1)); continue; }
+      if ! out=$(gh_bounded pr list --repo "$repo" --state open --limit "$pr_fetch_limit" \
+        --json number,title,url,headRefName,headRefOid,reviewDecision,mergeable,statusCheckRollup 2>/dev/null); then
+        out=$(gh_bounded pr list --repo "$repo" --state open --limit "$pr_fetch_limit" \
+          --json number,title,url,headRefName,reviewDecision,mergeable,statusCheckRollup 2>/dev/null) \
+          || { nwarn=$((nwarn + 1)); continue; }
+      fi
       [ -n "$out" ] || out='[]'
       repo_result=$(printf '%s' "$out" | jq --arg repo "$repo" --argjson limit "$FM_BEARINGS_PR_LIMIT" '
         [ .[] | {
           num:(.number|tostring),
           repo:$repo,
           task:(if (.headRefName // "" | startswith("fm/")) then (.headRefName | ltrimstr("fm/")) else "-" end),
+          head:(.headRefOid // null),
           url:(.url // "-"),
           review:(.reviewDecision // "none"),
           mergeable:(.mergeable // "UNKNOWN"),
@@ -307,6 +311,21 @@ MODEL=$(printf '%s' "$SNAP" | jq \
        | $groups[]
        | select(length > $i)
        | .[$i]][:$n];
+  def pr_match($task):
+    if $include_prs != 1 or (($task.pr.url // "") == "") then null
+    else
+      ([ $candidate_prs[]
+         | select(.task == $task.id)
+         | select(.url == $task.pr.url)
+         | select((($task.pr.head // "") == "") or ((.head // "") == "") or (.head == $task.pr.head)) ][0] // null)
+    end;
+  def pr_evidence($match):
+    if $match == null then "-"
+    else
+      ((if (($match.head // "") == "") then "exact PR" else "exact-head PR" end)
+       + " checks " + ($match.checks // "unknown")
+       + "; review " + (($match.review // "") | if . == "" then "none" else . end))
+    end;
   ($fields | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(. != ""))) as $fl
   | (($fl | index("bodies")) != null) as $f_bodies
   | (($fl | index("paths")) != null) as $f_paths
@@ -366,19 +385,21 @@ MODEL=$(printf '%s' "$SNAP" | jq \
           provenance:.provenance.selected,freshness:.freshness.status,
           age_seconds:.freshness.age_seconds,contradiction:(.contradiction // false),
           reason:(.current.reason // "-")} ]) as $secondmates_all
-  | ([ .tasks[]
-       | select(.kind != "secondmate")
-       | select(.backlog.current_role != "program")
-       | select(.backlog.current_role != "held" or .current_state.state == "working")
-       | {id, kind,
-        state: .current_state.state,
-        doing: ((.current_state.detail // "") as $d
-                | (if $d != "" then $d else (.hints.last_event_text // "") end) | trunc(90))
-      } ]
+  | ([ .tasks[] as $task
+       | select($task.kind != "secondmate")
+       | select($task.backlog.current_role != "program")
+       | select($task.backlog.current_role != "held" or $task.current_state.state == "working")
+       | {id:$task.id, kind:$task.kind,
+          state: $task.current_state.state,
+          doing: (($task.current_state.detail // "") as $d
+                  | (if $d != "" then $d else ($task.hints.last_event_text // "") end) | trunc(90))
+         }
+         + (if $include_prs == 1 then {pr_evidence:pr_evidence(pr_match($task))} else {} end) ]
      + [ $secondmate_views[]
          | select(.bearings_state == "active_child_work")
          | {id,kind:"secondmate",state:.bearings_state,
-            doing:([.active_children[] | .id + ": " + (.doing // .state)] | join("; ") | trunc(90))} ]) as $in_flight_all
+            doing:([.active_children[] | .id + ": " + (.doing // .state)] | join("; ") | trunc(90))}
+            + (if $include_prs == 1 then {pr_evidence:"-"} else {} end) ]) as $in_flight_all
   | ([ .backlog.records[]
          | select(.structured and .captain_actionable == true)
          | {id,key:.id,verb:"captain-hold",

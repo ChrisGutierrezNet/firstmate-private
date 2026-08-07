@@ -46,12 +46,13 @@ if [ "${FAKE_GH_FAIL:-0}" = 1 ]; then exit 1; fi
 if [ "${FAKE_GH_SLEEP:-0}" = 1 ]; then sleep 30; fi
 if [ "${FAKE_GH_MANY:-0}" = 1 ]; then
   cat <<'JSON'
-[{"number":1,"title":"One","url":"https://github.com/acme/repo/pull/1","headRefName":"fm/one","reviewDecision":"","mergeable":"MERGEABLE","statusCheckRollup":[]},{"number":2,"title":"Two","url":"https://github.com/acme/repo/pull/2","headRefName":"fm/two","reviewDecision":"","mergeable":"MERGEABLE","statusCheckRollup":[]},{"number":3,"title":"Three","url":"https://github.com/acme/repo/pull/3","headRefName":"fm/three","reviewDecision":"","mergeable":"MERGEABLE","statusCheckRollup":[]}]
+[{"number":1,"title":"One","url":"https://github.com/acme/repo/pull/1","headRefName":"fm/one","headRefOid":"1111111111111111111111111111111111111111","reviewDecision":"","mergeable":"MERGEABLE","statusCheckRollup":[]},{"number":2,"title":"Two","url":"https://github.com/acme/repo/pull/2","headRefName":"fm/two","headRefOid":"2222222222222222222222222222222222222222","reviewDecision":"","mergeable":"MERGEABLE","statusCheckRollup":[]},{"number":3,"title":"Three","url":"https://github.com/acme/repo/pull/3","headRefName":"fm/three","headRefOid":"3333333333333333333333333333333333333333","reviewDecision":"","mergeable":"MERGEABLE","statusCheckRollup":[]}]
 JSON
   exit 0
 fi
-cat <<'JSON'
-[{"number":9,"title":"Ship the thing","url":"https://github.com/kunchenguid/firstmate/pull/9","headRefName":"fm/ship-task","reviewDecision":"APPROVED","mergeable":"MERGEABLE","statusCheckRollup":[{"conclusion":"SUCCESS","status":"COMPLETED"}]}]
+head="${FAKE_GH_HEAD:-1111111111111111111111111111111111111111}"
+cat <<JSON
+[{"number":9,"title":"Ship the thing","url":"https://github.com/kunchenguid/firstmate/pull/9","headRefName":"fm/ship-task","headRefOid":"$head","reviewDecision":"APPROVED","mergeable":"MERGEABLE","statusCheckRollup":[{"conclusion":"SUCCESS","status":"COMPLETED"}]}]
 JSON
 SH
   cat > "$fb/gh-axi" <<'SH'
@@ -123,7 +124,8 @@ EOF
     "harness=claude" \
     "kind=ship" \
     "mode=no-mistakes" \
-    "pr=https://github.com/kunchenguid/firstmate/pull/9"
+    "pr=https://github.com/kunchenguid/firstmate/pull/9" \
+    "pr_head=1111111111111111111111111111111111111111"
   record_claude_state "$home/state" ship-task busy
   printf 'working: building the thing\n' > "$home/state/ship-task.status"
   fm_write_meta "$home/state/scout-x.meta" \
@@ -893,6 +895,8 @@ test_default_is_bounded_and_local_only() {
   assert_contains "$toon" "live PR discovery + checks,\"--include-prs\"" "omitted must mark the dropped live-PR surface"
   # Valid JSON, correct schema.
   printf '%s' "$json" | jq -e '.schema == "fm-bearings.v1"' >/dev/null || fail "json schema wrong"
+  printf '%s' "$json" | jq -e '.in_flight | all(has("pr_evidence") | not)' >/dev/null \
+    || fail "default local-only in_flight schema changed: $json"
   pass "default output is bounded, local-only, and marks omitted surfaces"
 }
 
@@ -976,9 +980,33 @@ test_include_prs_is_the_only_fetch_path() {
     .prs | startswith("checked")
   ' >/dev/null || fail "--include-prs must report checked PR state"
   printf '%s' "$json" | jq -e '
-    .candidate_prs | any(.[]; .num == "9" and .task == "ship-task" and .checks == "passing" and .review == "APPROVED")
+    .candidate_prs | any(.[]; .num == "9" and .task == "ship-task" and .checks == "passing" and .review == "APPROVED" and .head == "1111111111111111111111111111111111111111")
   ' >/dev/null || fail "candidate_prs must carry the fetched PR cross-referenced to its task: $json"
   pass "--include-prs is the only path that fetches, and it enriches correctly"
+}
+
+test_include_prs_exact_head_qualifies_in_flight_item() {
+  local home fakebin json
+  home=$(make_home prs-in-flight); write_fixture "$home"
+  fakebin=$(make_fakebin "$home"); : > "$home/net.log"
+  json=$(run "$home" "$fakebin" --include-prs --json)
+  printf '%s' "$json" | jq -e '
+    .in_flight | any(.[]; .id == "ship-task"
+      and .pr_evidence == "exact-head PR checks passing; review APPROVED")
+  ' >/dev/null || fail "exact-head PR evidence did not qualify the matching in-flight item: $json"
+  pass "--include-prs joins exact-head PR evidence into the matching in-flight item"
+}
+
+test_include_prs_mismatched_head_does_not_qualify_in_flight_item() {
+  local home fakebin json
+  home=$(make_home prs-stale-head); write_fixture "$home"
+  fakebin=$(make_fakebin "$home"); : > "$home/net.log"
+  json=$(FAKE_GH_HEAD=9999999999999999999999999999999999999999 run "$home" "$fakebin" --include-prs --json)
+  printf '%s' "$json" | jq -e '
+    (.candidate_prs | any(.[]; .num == "9" and .head == "9999999999999999999999999999999999999999"))
+      and (.in_flight | any(.[]; .id == "ship-task" and .pr_evidence == "-"))
+  ' >/dev/null || fail "stale-head PR evidence overrode the current in-flight item: $json"
+  pass "--include-prs refuses to qualify in-flight state with mismatched-head PR evidence"
 }
 
 test_partial_github_failure_degrades() {
@@ -1720,15 +1748,17 @@ EOF
     .secondmate_current.records[] | select(.id == "sshhip")
     | .current.state == "unknown"
       and (.current.reason | contains("live child state has no in-flight backlog item: unreadable-child=unknown"))
-      and .provenance.selected != "structured-home"
-      and .invalidity == null
+      and .provenance.selected == "structured-home"
+      and .provenance.summary_valid == false
+      and .provenance.trust == "partial-structured"
+      and .invalidity == {kind:"unowned_current",ids:["unreadable-child"]}
       and .active_children == []
-      and .decisions_open == []
-      and .holds == []
-      and .queued == []
-      and .landed == []
-      and .endpoints == []
-  ' >/dev/null || fail "an unowned unknown child received partial structured projection: $canonical"
+      and [.decisions_open[].id] == ["reviewer-decision"]
+      and [.holds[].id] == ["reviewer-decision"]
+      and [.queued[].id] == ["reviewer-decision"]
+      and [.landed[].id] == ["prior-release"]
+      and [.endpoints[].id] == ["unreadable-child"]
+  ' >/dev/null || fail "an unowned unknown child did not retain partial structured projection: $canonical"
   sed '/## In flight/a\
 - [ ] unreadable-child - Submit App Store build (repo: sshhip) (kind: ship)' \
     "$sshhip/data/backlog.md" > "$sshhip/data/backlog.next"
@@ -1924,6 +1954,8 @@ test_open_decision_surfaces_end_to_end
 test_report_pointers_surface
 test_superseded_queued_item_dropped_by_default
 test_include_prs_is_the_only_fetch_path
+test_include_prs_exact_head_qualifies_in_flight_item
+test_include_prs_mismatched_head_does_not_qualify_in_flight_item
 test_partial_github_failure_degrades
 test_perl_fallback_bounds_github_call
 test_section_caps_and_expansion_flags

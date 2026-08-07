@@ -17,6 +17,7 @@ make_fakebin() {  # <dir>
   fb=$(fm_fakebin "$1")
   cat > "$fb/no-mistakes" <<'SH'
 #!/usr/bin/env bash
+[ "${FAKE_NM_SLEEP:-0}" = 1 ] && sleep 1
 exit 0
 SH
   cat > "$fb/tmux" <<'SH'
@@ -67,6 +68,13 @@ record_claude_idle() {  # <state-dir> <id>
   gen=$("$ROOT/bin/fm-busy-event.sh" arm "$state" "$id")
   "$ROOT/bin/fm-busy-event.sh" apply "$state" "$id" idle --gen "$gen" \
     --source claude-hook --event stop
+}
+
+record_claude_busy() {  # <state-dir> <id>
+  local state=$1 id=$2 gen
+  gen=$("$ROOT/bin/fm-busy-event.sh" arm "$state" "$id")
+  "$ROOT/bin/fm-busy-event.sh" apply "$state" "$id" busy --gen "$gen" \
+    --source claude-hook --event user-prompt-submit
 }
 
 write_fixture() {  # <home>
@@ -779,7 +787,423 @@ test_parked_scout_decision_stays_pending() {
   pass "a scout still parked at a decision stays pending (terminal clear does not over-fire)"
 }
 
+# --- large-inventory argv transport ----------------------------------------
+#
+# A real fleet backlog serializes to more JSON than Linux permits in a SINGLE
+# exec argument (MAX_ARG_STRLEN, 128 KiB) while the whole argument list stays far
+# below the much larger total ARG_MAX. Handing snapshot aggregates to jq with
+# --argjson therefore failed with "Argument list too long" once the inventory
+# grew, and both the snapshot and its Bearings renderer stopped producing any
+# report. These tests pin both halves of the repair: an inventory larger than
+# that per-argument ceiling must still snapshot completely, and no snapshot jq
+# call may carry fleet data on the command line at all.
+FM_SNAPSHOT_ARGV_LIMIT_BYTES=131072
+
+# A parent home whose backlog alone exceeds the per-argument exec limit, with a
+# registered secondmate so the cross-home aggregation path is exercised too.
+# Echoes "<queued-rows> <done-rows>".
+write_large_inventory_fixture() {  # <home> <mate-home>
+  local home=$1 mate=$2 queued=180 done_rows=120 i pad
+  pad="carrying a deliberately long descriptive title so the parsed backlog serializes past the per-argument exec limit"
+  mkdir -p "$home/projects/alpha-worktree" "$home/projects/beta-worktree"
+  {
+    printf '## In flight\n'
+    printf -- '- [ ] alpha-ship - Alpha ship %s (repo: alpha) (kind: ship) (since 2026-07-11)\n' "$pad"
+    printf -- '- [ ] beta-ship - Beta ship %s (repo: beta) (kind: ship) (since 2026-07-11)\n' "$pad"
+    printf '\n## Queued\n'
+    i=1
+    while [ "$i" -le "$queued" ]; do
+      printf -- '- [ ] queued-%03d - Queued item %03d %s (repo: alpha) (kind: ship) (priority: 2) (since 2026-07-11)\n' \
+        "$i" "$i" "$pad"
+      i=$((i + 1))
+    done
+    printf '\n## Done\n'
+    i=1
+    while [ "$i" -le "$done_rows" ]; do
+      printf -- '- [x] done-%03d - Done item %03d %s https://github.com/kunchenguid/firstmate/pull/%d (repo: alpha) (kind: ship) (merged 2026-07-10)\n' \
+        "$i" "$i" "$pad" "$i"
+      i=$((i + 1))
+    done
+  } > "$home/data/backlog.md"
+
+  fm_write_meta "$home/state/alpha-ship.meta" \
+    "window=firstmate:fm-alpha-ship" \
+    "worktree=$home/projects/alpha-worktree" \
+    "project=alpha" "harness=codex" "kind=ship" "mode=ship" "yolo=off"
+  fm_write_meta "$home/state/beta-ship.meta" \
+    "window=firstmate:fm-beta-ship" \
+    "worktree=$home/projects/beta-worktree" \
+    "project=beta" "harness=codex" "kind=ship" "mode=ship" "yolo=off"
+
+  # Registered secondmate in a sibling home, so the union, per-record, and record
+  # accumulator handoffs run rather than being skipped as an empty fleet.
+  mkdir -p "$mate/data" "$mate/state" "$mate/config" "$mate/projects" "$mate/bin"
+  printf '# Firstmate\n' > "$mate/AGENTS.md"
+  printf 'delegate\n' > "$mate/.fm-secondmate-home"
+  printf '## In flight\n\n## Queued\n\n## Done\n' > "$mate/data/backlog.md"
+  fm_write_meta "$home/state/delegate.meta" \
+    "window=firstmate:fm-delegate" \
+    "worktree=$mate" "project=$mate" "harness=codex" \
+    "kind=secondmate" "mode=secondmate" "yolo=off" \
+    "home=$mate" "projects=alpha"
+  printf 'working: watching delegated scope\n' > "$home/state/delegate.status"
+  printf -- '- delegate - delegated scope (home: %s; scope: delegated scope; projects: alpha; added 2026-07-11)\n' \
+    "$mate" > "$home/data/secondmates.md"
+
+  printf '%s %s\n' "$queued" "$done_rows"
+}
+
+test_large_inventory_snapshot_survives_argv_limit() {
+  local home mate fakebin out rows queued done_rows backlog_bytes records expected
+  home=$(make_home large-inventory)
+  mate=$(make_home large-inventory-mate)
+  rows=$(write_large_inventory_fixture "$home" "$mate")
+  queued=${rows% *}
+  done_rows=${rows#* }
+  fakebin=$(make_fakebin "$home")
+
+  out=$(PATH="$fakebin:$PATH" FM_HOME="$home" "$SNAPSHOT" --json) \
+    || fail "snapshot must succeed on an inventory larger than the per-argument exec limit"
+  printf '%s' "$out" | jq -e . >/dev/null || fail "large-inventory snapshot must be valid JSON"
+
+  # The fixture only pins the regression while it really is bigger than the
+  # ceiling that used to break the command.
+  backlog_bytes=$(printf '%s' "$out" | jq '.backlog | tojson | length')
+  [ "$backlog_bytes" -gt "$FM_SNAPSHOT_ARGV_LIMIT_BYTES" ] \
+    || fail "fixture backlog is only $backlog_bytes bytes; it must exceed $FM_SNAPSHOT_ARGV_LIMIT_BYTES to pin this regression"
+
+  # Nothing may be dropped to make the command fit.
+  expected=$((2 + queued + done_rows))
+  records=$(printf '%s' "$out" | jq '.backlog.records | length')
+  [ "$records" = "$expected" ] \
+    || fail "large snapshot dropped backlog records: got $records, expected $expected"
+  printf '%s' "$out" | jq -e --argjson queued "$queued" --argjson done_rows "$done_rows" '
+    .schema == "fm-fleet-snapshot.v1"
+      and ([.backlog.records[] | select(.state == "in_flight")] | length) == 2
+      and ([.backlog.records[] | select(.state == "queued")] | length) == $queued
+      and ([.backlog.records[] | select(.state == "done")] | length) == $done_rows
+      and ([.backlog.records[] | select(.structured | not)] | length) == 0
+      and .main_inventory.valid == true
+      and .main_inventory.reason == null
+      and (.tasks | map(.id)) == ["alpha-ship","beta-ship","delegate"]
+  ' >/dev/null || fail "large snapshot lost inventory integrity or task rows"
+
+  # The cross-home aggregation must still resolve, not degrade to unknown.
+  printf '%s' "$out" | jq -e '
+    .secondmate_current.total == 1
+      and .secondmate_current.shown == 1
+      and (.secondmate_current.records | length) == 1
+      and .secondmate_current.records[0].id == "delegate"
+      and .secondmate_current.records[0].registered == true
+      and .secondmate_current.records[0].provenance.selected == "structured-home"
+  ' >/dev/null || fail "large snapshot lost the registered secondmate record: $(printf '%s' "$out" | jq -c '.secondmate_current')"
+
+  # The secondmate summary mode reads the same oversized backlog. This fixture
+  # registers a secondmate with no in-flight backlog row, so the expected verdict
+  # is that documented unowned-current disclosure - never a failed backlog read.
+  out=$(PATH="$fakebin:$PATH" FM_HOME="$home" "$SNAPSHOT" --secondmate-home-summary) \
+    || fail "secondmate home summary must succeed on an oversized inventory"
+  printf '%s' "$out" | jq -e --argjson queued "$queued" --argjson done_rows "$done_rows" '
+    .schema == "fm-secondmate-home-summary.v1"
+      and .counts.queued == $queued
+      and .counts.landed == $done_rows
+      and .counts.endpoints == 3
+      and .invalidity.kind == "unowned_current"
+  ' >/dev/null || fail "oversized secondmate home summary lost bounded counts: $out"
+  pass "snapshot and secondmate summary complete on an inventory past the per-argument exec limit"
+}
+
+# A finished or deliberately cancelled child whose delivery artifact is preserved
+# unlanded is not an inventory contradiction. The in-flight row that carries the
+# hold, and the queued row the work was moved to, both already state that no
+# worker is running; only a row that still claims a live worker contradicts a
+# terminal child, and only an unrecorded id contradicts the inventory. Without
+# that boundary a whole readable home degraded to unknown, hiding its backlog and
+# its preserved open PRs, and the only way to silence it would have been deleting
+# task records that unlanded branches still depend on.
+write_preserved_artifact_home() {  # <mate-home> [extra-in-flight-row] [extra-queued-row]
+  local mate=$1 extra_in_flight=${2:-} extra_queued=${3:-}
+  mkdir -p "$mate/data" "$mate/state" "$mate/config" "$mate/projects" "$mate/bin"
+  printf '# Firstmate\n' > "$mate/AGENTS.md"
+  printf 'delegate\n' > "$mate/.fm-secondmate-home"
+  {
+    printf '## In flight\n'
+    printf -- '- [ ] preserved-pr - Preserved release https://github.com/kunchenguid/firstmate/pull/1001 (repo: alpha) (kind: ship) (since 2026-08-01) (hold: Complete and preserved; not landed.) (hold-kind: external)\n'
+    [ -n "$extra_in_flight" ] && printf '%s\n' "$extra_in_flight"
+    printf '\n## Queued\n'
+    printf -- '- [ ] held-intake - Held intake behind an open PR (repo: alpha) (kind: ship) (since 2026-08-01) (hold: PR 1005 unapproved for merge.) (hold-kind: external)\n'
+    [ -n "$extra_queued" ] && printf '%s\n' "$extra_queued"
+    printf '\n## Done\n'
+  } > "$mate/data/backlog.md"
+  write_preserved_child "$mate" preserved-pr \
+    'failed: run cancelled to stop merge-monitoring; PR 1001 open, unmerged, not deployed' \
+    https://github.com/kunchenguid/firstmate/pull/1001
+  write_preserved_child "$mate" held-intake \
+    'failed: run cancelled deliberately; PR 1005 open, unmerged, awaiting the captain' \
+    https://github.com/kunchenguid/firstmate/pull/1005
+}
+
+write_preserved_child() {  # <mate-home> <id> <status-line> [pr-url]
+  local mate=$1 id=$2 line=$3 pr=${4:-}
+  mkdir -p "$mate/projects/$id"
+  fm_write_meta "$mate/state/$id.meta" \
+    "window=firstmate:fm-$id" \
+    "endpoint_task_id=$id" \
+    "worktree=$mate/projects/$id" \
+    "project=alpha" "harness=claude" "kind=ship" "mode=no-mistakes" "yolo=off"
+  [ -n "$pr" ] && printf 'pr=%s\n' "$pr" >> "$mate/state/$id.meta"
+  printf '%s\n' "$line" > "$mate/state/$id.status"
+  # A crew whose monitor was cancelled is semantically IDLE, and only an exact
+  # idle verdict lets fm-crew-state.sh consult the status log for the terminal
+  # state this fixture is about (bin/fm-busy-lib.sh; unknown is never idle).
+  record_claude_idle "$mate/state" "$id"
+}
+
+register_preserved_secondmate() {  # <parent-home> <mate-home>
+  local home=$1 mate=$2
+  printf '## In flight\n\n## Queued\n\n## Done\n' > "$home/data/backlog.md"
+  printf -- '- delegate - delegated scope (home: %s; scope: delegated scope; projects: alpha; added 2026-08-01)\n' \
+    "$mate" > "$home/data/secondmates.md"
+  fm_write_secondmate_meta "$home/state/delegate.meta" "$mate"
+  printf 'working: watching delegated scope\n' > "$home/state/delegate.status"
+}
+
+test_preserved_terminal_artifact_stays_charted() {
+  local home mate fakebin out
+  home=$(make_home preserved-parent)
+  mate=$(make_home preserved-mate)
+  write_preserved_artifact_home "$mate"
+  register_preserved_secondmate "$home" "$mate"
+  fakebin=$(make_fakebin "$home")
+
+  out=$(PATH="$fakebin:$PATH" FM_HOME="$mate" "$SNAPSHOT" --secondmate-home-summary) \
+    || fail "the home summary must succeed on preserved terminal artifacts"
+  printf '%s' "$out" | jq -e '
+    .valid == true
+      and .reason == null
+      and .invalidity.kind == null
+      and .state == "externally_held"
+      and .active_children == []
+      and .landed == []
+      and ([.holds[].id] | sort) == ["held-intake","preserved-pr"]
+      and ([.endpoints[] | select(.state == "failed") | .id] | sort) == ["held-intake","preserved-pr"]
+  ' >/dev/null || fail "preserved terminal artifacts were not charted as held: $out"
+
+  out=$(PATH="$fakebin:$PATH" FM_HOME="$home" "$SNAPSHOT" --json) \
+    || fail "the parent snapshot must succeed over a home holding preserved terminal artifacts"
+  printf '%s' "$out" | jq -e '
+    .secondmate_current.records[] | select(.id == "delegate")
+    | .provenance.selected == "structured-home"
+      and .provenance.summary_valid == true
+      and .current.state == "externally_held"
+      and .current.reason == null
+      and .active_children == []
+      and ([.holds[].id] | sort) == ["held-intake","preserved-pr"]
+  ' >/dev/null || fail "a readable home with preserved terminal artifacts degraded to unknown: $out"
+
+  # A row that still claims a live worker is the real terminal contradiction.
+  mate=$(make_home preserved-mate-stalled)
+  write_preserved_artifact_home "$mate" \
+    '- [ ] stalled-worker - Ship still claimed as under way (repo: alpha) (kind: ship) (since 2026-08-01)'
+  write_preserved_child "$mate" stalled-worker 'failed: run failed'
+  out=$(PATH="$fakebin:$PATH" FM_HOME="$mate" "$SNAPSHOT" --secondmate-home-summary) \
+    || fail "the home summary must succeed on a stalled worker row"
+  printf '%s' "$out" | jq -e '
+    .valid == false
+      and .state == "unknown"
+      and .invalidity == {kind:"terminal_in_flight",ids:["stalled-worker"]}
+  ' >/dev/null || fail "an in-flight worker row with a terminal child stopped being invalid: $out"
+
+  # A live child under a row that claims no worker is still off the books.
+  mate=$(make_home preserved-mate-runaway)
+  write_preserved_artifact_home "$mate" "" \
+    '- [ ] runaway - Queued while a worker runs (repo: alpha) (kind: ship) (since 2026-08-01)'
+  write_preserved_child "$mate" runaway 'working: implementing the change'
+  out=$(PATH="$fakebin:$PATH" FM_HOME="$mate" "$SNAPSHOT" --secondmate-home-summary) \
+    || fail "the home summary must succeed on a runaway child"
+  printf '%s' "$out" | jq -e '
+    .valid == false
+      and .state == "unknown"
+      and .invalidity == {kind:"unowned_current",ids:["runaway"]}
+  ' >/dev/null || fail "a live child with no in-flight row stopped being invalid: $out"
+
+  # A terminal child the backlog never records at all is still off the books.
+  mate=$(make_home preserved-mate-ghost)
+  write_preserved_artifact_home "$mate"
+  write_preserved_child "$mate" ghost 'failed: run cancelled'
+  out=$(PATH="$fakebin:$PATH" FM_HOME="$mate" "$SNAPSHOT" --secondmate-home-summary) \
+    || fail "the home summary must succeed on an unrecorded terminal child"
+  printf '%s' "$out" | jq -e '
+    .valid == false
+      and .state == "unknown"
+      and .invalidity == {kind:"unowned_current",ids:["ghost"]}
+  ' >/dev/null || fail "a terminal child with no backlog record stopped being invalid: $out"
+  pass "preserved terminal artifacts stay charted while real terminal contradictions stay invalid"
+}
+
+test_secondmate_summary_budget_excludes_repeated_child_probe_wallclock() {
+  local home mate fakebin out i child
+  home=$(make_home summary-budget-parent)
+  mate=$(make_home summary-budget-mate)
+  mkdir -p "$mate/data" "$mate/state" "$mate/config" "$mate/projects" "$mate/bin"
+  printf '# Firstmate\n' > "$mate/AGENTS.md"
+  printf 'delegate\n' > "$mate/.fm-secondmate-home"
+  printf '## In flight\n' > "$mate/data/backlog.md"
+  i=1
+  while [ "$i" -le 6 ]; do
+    child="child-$i"
+    mkdir -p "$mate/projects/$child"
+    printf -- '- [ ] %s - Child %s (repo: alpha) (kind: ship) (since 2026-07-11)\n' \
+      "$child" "$i" >> "$mate/data/backlog.md"
+    fm_write_meta "$mate/state/$child.meta" \
+      "window=firstmate:fm-$child" \
+      "worktree=$mate/projects/$child" \
+      "project=alpha" "harness=claude" "kind=ship" "mode=ship" "yolo=off"
+    printf 'working: child %s\n' "$i" > "$mate/state/$child.status"
+    # Working children prove it through their own semantic busy-state record,
+    # which is what the summary's current-state read consults.
+    record_claude_busy "$mate/state" "$child"
+    i=$((i + 1))
+  done
+  printf '\n## Queued\n\n## Done\n' >> "$mate/data/backlog.md"
+  printf -- '- delegate - delegated scope (home: %s; scope: delegated scope; projects: alpha; added 2026-07-11)\n' \
+    "$mate" > "$home/data/secondmates.md"
+  fm_write_meta "$home/state/delegate.meta" \
+    "window=firstmate:fm-delegate" \
+    "worktree=$mate" "project=$mate" "harness=codex" \
+    "kind=secondmate" "mode=secondmate" "yolo=off" \
+    "home=$mate" "projects=alpha"
+  printf 'working: watching delegated scope\n' > "$home/state/delegate.status"
+  fakebin=$(make_fakebin "$home")
+
+  out=$(PATH="$fakebin:$PATH" FAKE_NM_SLEEP=1 FM_HOME="$home" \
+    FM_SNAPSHOT_SECONDMATE_TIMEOUT=3 "$SNAPSHOT" --json) \
+    || fail "secondmate summary timed out when repeated child probes should run within the summary budget"
+  printf '%s' "$out" | jq -e '
+    .secondmate_current.records[] | select(.id == "delegate")
+    | .provenance.selected == "structured-home"
+      and .current.state == "active_child_work"
+      and .counts.active_children == 6
+      and (.active_children | length) == 6
+  ' >/dev/null || fail "budgeted secondmate summary did not retain structured child activity: $out"
+  pass "secondmate summary budget excludes repeated child-probe wall-clock"
+}
+
+# Deterministic proof independent of the host's own limit: a jq shim rejects any
+# --arg/--argjson VALUE over the threshold. Filter programs are fixed source text
+# and are deliberately not checked - only data transport is.
+make_jq_argv_guard() {  # <dir>
+  local fb
+  fb="$1/jq-argv-guard"
+  mkdir -p "$fb"
+  cat > "$fb/jq" <<'SH'
+#!/usr/bin/env bash
+set -u
+max=${FM_TEST_JQ_ARGV_MAX:?}
+real=${FM_TEST_REAL_JQ:?}
+expect=0
+for a in "$@"; do
+  case "$expect" in
+    2) expect=1; continue ;;
+    1) expect=0
+       if [ "${#a}" -gt "$max" ]; then
+         printf 'fm-test: jq got a %s-byte --arg/--argjson value (limit %s)\n' "${#a}" "$max" >&2
+         exit 97
+       fi
+       continue ;;
+  esac
+  case "$a" in
+    --arg|--argjson) expect=2 ;;
+  esac
+done
+exec "$real" "$@"
+SH
+  chmod +x "$fb/jq"
+  printf '%s\n' "$fb"
+}
+
+test_snapshot_keeps_large_json_off_the_command_line() {
+  local home mate fakebin guard real_jq out rc big
+  home=$(make_home argv-guard)
+  mate=$(make_home argv-guard-mate)
+  write_large_inventory_fixture "$home" "$mate" >/dev/null
+  fakebin=$(make_fakebin "$home")
+  guard=$(make_jq_argv_guard "$home")
+  real_jq=$(command -v jq) || fail "jq not found"
+
+  # Sanity: the guard really does fire on argv-transported data.
+  big=$(head -c 9000 /dev/zero | tr '\0' 'x')
+  out=$(PATH="$guard:$PATH" FM_TEST_JQ_ARGV_MAX=8192 FM_TEST_REAL_JQ="$real_jq" \
+    jq -n --arg big "$big" '$big | length' 2>&1)
+  rc=$?
+  [ "$rc" -eq 97 ] || fail "argv guard failed to reject an oversized --arg value (rc=$rc): $out"
+
+  out=$(PATH="$guard:$fakebin:$PATH" FM_TEST_JQ_ARGV_MAX=8192 FM_TEST_REAL_JQ="$real_jq" \
+    FM_HOME="$home" "$SNAPSHOT" --json 2>&1)
+  rc=$?
+  [ "$rc" -eq 0 ] \
+    || fail "snapshot passed fleet JSON on the command line (rc=$rc): $(printf '%s' "$out" | tail -3)"
+  printf '%s' "$out" | jq -e '.schema == "fm-fleet-snapshot.v1"' >/dev/null \
+    || fail "guarded snapshot did not produce the documented schema"
+
+  out=$(PATH="$guard:$fakebin:$PATH" FM_TEST_JQ_ARGV_MAX=8192 FM_TEST_REAL_JQ="$real_jq" \
+    FM_HOME="$home" "$SNAPSHOT" --secondmate-home-summary 2>&1)
+  rc=$?
+  [ "$rc" -eq 0 ] \
+    || fail "secondmate home summary passed fleet JSON on the command line (rc=$rc): $(printf '%s' "$out" | tail -3)"
+  printf '%s' "$out" | jq -e '.schema == "fm-secondmate-home-summary.v1"' >/dev/null \
+    || fail "guarded secondmate home summary did not produce the documented schema"
+  pass "no snapshot jq call carries fleet JSON as a command-line argument"
+}
+
+# A jq that answers the backlog parse (jq -Rn over data/backlog.md) with no
+# output and a success status, standing in for an upstream JSON read that yields
+# nothing.
+make_jq_empty_read_stub() {  # <dir>
+  local fb
+  fb="$1/jq-empty-read"
+  mkdir -p "$fb"
+  cat > "$fb/jq" <<'SH'
+#!/usr/bin/env bash
+set -u
+real=${FM_TEST_REAL_JQ:?}
+for a in "$@"; do
+  if [ "$a" = "-Rn" ]; then exit 0; fi
+done
+exec "$real" "$@"
+SH
+  chmod +x "$fb/jq"
+  printf '%s\n' "$fb"
+}
+
+# --argjson rejected an empty value outright. --slurpfile would instead bind []
+# and read back as null, which would quietly turn a failed backlog read into a
+# real-looking empty inventory. The transport must stay fail-loud.
+test_empty_upstream_read_stops_the_snapshot() {
+  local home mate fakebin stub real_jq out rc
+  home=$(make_home empty-read)
+  mate=$(make_home empty-read-mate)
+  write_large_inventory_fixture "$home" "$mate" >/dev/null
+  fakebin=$(make_fakebin "$home")
+  stub=$(make_jq_empty_read_stub "$home")
+  real_jq=$(command -v jq) || fail "jq not found"
+
+  out=$(PATH="$stub:$fakebin:$PATH" FM_TEST_REAL_JQ="$real_jq" FM_HOME="$home" \
+    "$SNAPSHOT" --json 2>&1)
+  rc=$?
+  [ "$rc" -ne 0 ] \
+    || fail "an empty backlog read must stop the snapshot, not report an empty inventory as real: $out"
+  assert_contains "$out" "main inventory summary failed" \
+    "the empty backlog read should surface the main inventory diagnostic"
+  pass "an empty upstream JSON read stops the snapshot instead of reading back as null"
+}
+
 test_empty_fleet_json
+test_large_inventory_snapshot_survives_argv_limit
+test_preserved_terminal_artifact_stays_charted
+test_secondmate_summary_budget_excludes_repeated_child_probe_wallclock
+test_snapshot_keeps_large_json_off_the_command_line
+test_empty_upstream_read_stops_the_snapshot
 test_fixture_snapshot_json
 test_main_inventory_orphan_and_unstructured_disclosure
 test_normalized_roles_and_plural_blocker_readiness

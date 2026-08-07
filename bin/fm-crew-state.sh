@@ -241,6 +241,70 @@ nm_gate_findings_count() {
   case "$rest" in ''|*[!0-9]*) return 0 ;; esac
   printf '%s' "$rest"
 }
+nm_bound_label() {  # <text> [max]
+  local text=$1 max=${2:-64}
+  case "$max" in ''|*[!0-9]*|0) max=64 ;; esac
+  if [ "${#text}" -gt "$max" ]; then
+    printf '%s...' "${text:0:$((max - 3))}"
+  else
+    printf '%s' "$text"
+  fi
+}
+nm_ci_check_records() {
+  printf '%s\n' "$RUN_OUT" | awk '
+    /CI check failing:/ {
+      line=$0
+      sub(/^[[:space:]]+/, "", line)
+      severity=line
+      sub(/^[^,]*,/, "", severity)
+      sub(/,.*/, "", severity)
+      gsub(/^[[:space:]"]+|[[:space:]"]+$/, "", severity)
+      name=$0
+      sub(/^.*CI check failing:[[:space:]]*/, "", name)
+      gsub(/^[[:space:]"]+|[[:space:]"]+$/, "", name)
+      if (name != "") print severity "\t" name
+    }'
+}
+nm_ci_check_records_summary() {
+  local severity name bounded total=0 warnings=0 shown=0 names=""
+  while IFS=$'\t' read -r severity name; do
+    [ -n "$name" ] || continue
+    total=$((total + 1))
+    [ "$severity" = warning ] && warnings=$((warnings + 1))
+    if [ "$shown" -lt 5 ]; then
+      bounded=$(nm_bound_label "$name" 64)
+      if [ -n "$names" ]; then names="$names, $bounded"; else names=$bounded; fi
+      shown=$((shown + 1))
+    fi
+  done <<EOF
+$(nm_ci_check_records)
+EOF
+  [ "$total" -gt 0 ] || return 0
+  if [ "$total" -gt "$shown" ]; then
+    names="$names, +$((total - shown)) more"
+  fi
+  printf '%s|%s|%s' "$total" "$warnings" "$names"
+}
+nm_ci_gate_findings_detail() {  # <finding-count>
+  local fcount=${1:-} summary total rest warnings names label
+  summary=$(nm_ci_check_records_summary)
+  [ -n "$summary" ] || return 0
+  total=${summary%%|*}
+  rest=${summary#*|}
+  warnings=${rest%%|*}
+  names=${rest#*|}
+  if [ "$warnings" = "$total" ]; then
+    label="$total warning check record(s)"
+  else
+    label="$total hosted check record(s)"
+  fi
+  case "$fcount" in ''|*[!0-9]*) fcount=$total ;; esac
+  if [ "$fcount" -gt "$total" ]; then
+    printf '%s finding(s), including hosted CI/check reconciliation records for %s (%s)' "$fcount" "$names" "$label"
+  else
+    printf 'hosted CI/check reconciliation records for %s (%s)' "$names" "$label"
+  fi
+}
 log_reports_ci_ready() {
   [ "$LOG_VERB" = "done" ] || return 1
   case "$(status_line_note "$LOG_LINE")" in
@@ -296,11 +360,12 @@ nm_ci_checks_state() {
   log_tail=$(nm_run axi logs --step ci --run "$run_id") || true
   [ -n "$log_tail" ] || { printf 'unknown'; return; }
   marker=$(printf '%s\n' "$log_tail" \
-    | grep -E 'CI checks passed|no CI checks reported - still monitoring|no CI checks reported yet|checks failed|issues detected|CI checks running|base branch advanced.*re-arming CI monitor timeout' \
+    | grep -E 'CI checks passed|no CI checks reported - still monitoring|no CI checks reported yet|waiting for checks to register|checks failed|issues detected|CI checks running|base branch advanced.*re-arming CI monitor timeout' \
     | tail -1)
   case "$marker" in
     *"checks passed"*|*"no CI checks reported - still monitoring"*) printf 'green' ;;
-    *"no CI checks reported yet"*|*"checks failed"*|*"issues detected"*|*"CI checks running"*|*"base branch advanced"*"re-arming CI monitor timeout"*) printf 'not-ready' ;;
+    *"no CI checks reported yet"*|*"waiting for checks to register"*) printf 'waiting-registration' ;;
+    *"checks failed"*|*"issues detected"*|*"CI checks running"*|*"base branch advanced"*"re-arming CI monitor timeout"*) printf 'not-ready' ;;
     *) printf 'unknown' ;;
   esac
 }
@@ -464,7 +529,13 @@ if [ "$HAVE_RUN" = 1 ]; then
       RUN_STATE=parked
       RUN_DETAIL="parked at $gate"
       fcount=$(nm_gate_findings_count)
-      [ -n "$fcount" ] && RUN_DETAIL="$RUN_DETAIL: $fcount finding(s)"
+      ci_detail=""
+      [ "$gate" = ci ] && ci_detail=$(nm_ci_gate_findings_detail "$fcount")
+      if [ -n "$ci_detail" ]; then
+        RUN_DETAIL="$RUN_DETAIL: $ci_detail"
+      elif [ -n "$fcount" ]; then
+        RUN_DETAIL="$RUN_DETAIL: $fcount finding(s)"
+      fi
       if printf '%s\n' "$RUN_OUT" | grep -q 'ask-user'; then
         RUN_DETAIL="$RUN_DETAIL (ask-user: authority decision)"
       fi
@@ -486,6 +557,8 @@ if [ "$HAVE_RUN" = 1 ]; then
             if [ "$CI_LOG_STATE" = green ]; then
               RUN_STATE="done"
               RUN_DETAIL="checks green: PR ready for review (still monitoring for merge/close)"
+            elif [ "$CI_LOG_STATE" = waiting-registration ]; then
+              RUN_DETAIL="waiting for hosted CI checks to register"
             fi
             ;;
           fixing)
@@ -508,9 +581,12 @@ if [ "$HAVE_RUN" = 1 ]; then
     elif [ "$CI_STEP_STATUS" = fixing ]; then
       CI_LOG_STATE=not-ready
     fi
-    if [ "$CI_LOG_STATE" != not-ready ]; then
+    case "$CI_LOG_STATE" in
+      not-ready|waiting-registration) ;;
+      *)
       emit "done" status-log "$(status_line_note "$LOG_LINE")${SEP}run still monitoring PR"
-    fi
+        ;;
+    esac
   fi
 
   # Reconcile the status log. A needs-decision/blocked log line that the run-step
