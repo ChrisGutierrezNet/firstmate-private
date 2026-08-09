@@ -133,7 +133,7 @@ now_ms() {
 family_for_basename() {
   case "$1" in
     fm-arm-pretool-check.test.sh|fm-ask-user-authority.test.sh|\
-    fm-brief.test.sh|fm-vendor-auth-probe.test.sh|\
+    fm-brief.test.sh|fm-data-date-index.test.sh|fm-vendor-auth-probe.test.sh|\
     fm-calm-pi-extension.test.sh|fm-cd-pretool-check.test.sh|\
     fm-composer-ghost.test.sh|fm-composer-lib.test.sh|fm-continuous-ops.test.sh|\
     fm-continuous-ops-github.test.sh|\
@@ -891,6 +891,9 @@ families_for_changed_path() {
     bin/fm-startup-memory-budget.sh|bin/fm-startup-memory-budget-lib.sh)
       printf '%s\n' secondmate
       printf '%s\n' session-bootstrap
+      ;;
+    bin/fm-data-date-index.sh)
+      printf '%s\n' pure-contract-unit
       ;;
     bin/fm-secondmate*|bin/fm-remote*|bin/fm-on.sh|bin/fm-home-seed.sh|\
     bin/fm-backlog-handoff.sh|bin/fm-backlog-receive.sh|bin/fm-procevent-remote-reply.sh|\

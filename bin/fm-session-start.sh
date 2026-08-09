@@ -508,6 +508,9 @@ fi
 if [ "$READ_ONLY" -eq 0 ]; then
   if [ "$REEMIT" -eq 0 ]; then
     rm -f "$COMPLETION_FILE" 2>/dev/null || true
+    if ! FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-data-date-index.sh" check >/dev/null; then
+      printf 'DATA_DATE_INDEX: optional fingerprint refresh failed; canonical session start continues and the last complete generated view remains current.\n' >&2
+    fi
   fi
   fm_trace_context_session_start "$CONFIG" "$STATE/.trace-context-effective"
 fi

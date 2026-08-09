@@ -582,6 +582,10 @@ spawn_remote_secondmate() {
     return 1
   fi
   echo "spawned $id harness=$harness kind=secondmate mode=secondmate yolo=off window=remote:$id worktree=$home remote=$host backend=$remote_backend"
+  if [ -z "${FM_DATA_OVERRIDE:-}${FM_STATE_OVERRIDE:-}" ] \
+    && ! FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-data-date-index.sh" refresh >/dev/null; then
+    echo "warning: optional private data date-index refresh failed after remote spawn publication; the spawn remains authoritative" >&2
+  fi
   return 0
 }
 
@@ -2340,4 +2344,8 @@ SPAWN_DELIVERY=
 echo "spawned $ID harness=$HARNESS kind=$KIND$SPAWN_DELIVERY window=$META_WINDOW worktree=$WT"
 if [ "$KIND" != secondmate ]; then
   fm_continuous_ops_refresh_quiet "spawn:$ID" >/dev/null 2>&1 || true
+fi
+if [ -z "${FM_DATA_OVERRIDE:-}${FM_STATE_OVERRIDE:-}" ] \
+  && ! FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-data-date-index.sh" refresh >/dev/null; then
+  echo "warning: optional private data date-index refresh failed after spawn publication; the spawn remains authoritative" >&2
 fi

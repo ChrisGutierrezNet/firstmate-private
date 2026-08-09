@@ -2588,6 +2588,10 @@ rm -f "$STATE/$ID.status" "$STATE/$ID.turn-ended" "$STATE/$ID.meta" \
 if [ "$KIND" != scout ] && [ "$KIND" != secondmate ] && [ "$MODE" != local-only ]; then
   "$FM_ROOT/bin/fm-fleet-sync.sh" "$PROJ" || true
 fi
+if [ -z "${FM_DATA_OVERRIDE:-}${FM_STATE_OVERRIDE:-}" ] \
+  && ! FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-data-date-index.sh" refresh >/dev/null; then
+  echo "warning: optional private data date-index refresh failed after teardown publication; the teardown remains authoritative" >&2
+fi
 echo "teardown $ID complete (window $T, worktree $WT)"
 backlog_refresh_reminder
 if [ "$KIND" != secondmate ]; then

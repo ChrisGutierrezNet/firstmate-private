@@ -11,7 +11,7 @@ The shared orchestrator behavior lives in [`AGENTS.md`](../AGENTS.md) - edit it 
 This section is the single owner of the top-level operational-home layout; producer script headers and their help own exact child-file fields and mutation contracts.
 The tracked code root contains the shared instruction, skill, documentation, workflow, and `bin/` surfaces, while each effective `FM_HOME` contains private operational directories.
 `data/` holds durable private fleet records such as the project and secondmate registries, captain preferences, optional shared captain preferences, learnings, backlog, briefs, and scout reports.
-`state/` holds volatile runtime records such as task metadata, append-only status events, endpoint signals, watcher and wake-queue coordination, away-mode state, generated Relay artifacts, private secondmate config-reread generations with their retry and quarantine state, and parent-owned secondmate pending-reply records under `state/pending-replies/` (`bin/fm-pending-reply-lib.sh`).
+`state/` holds volatile runtime records such as task metadata, append-only status events, endpoint signals, watcher and wake-queue coordination, away-mode state, generated Relay artifacts, private generated data-date views, private secondmate config-reread generations with their retry and quarantine state, and parent-owned secondmate pending-reply records under `state/pending-replies/` (`bin/fm-pending-reply-lib.sh`).
 `config/` holds local gitignored operating choices, and `projects/` holds the local project clones that Firstmate reads but changes only through the narrow guarded and concrete captain-approved exceptions in `AGENTS.md`.
 
 `bin/fm-spawn.sh` owns the base task-metadata fields it emits, while the runtime-backend section below owns backend-specific fields and selector interpretation.
@@ -22,6 +22,16 @@ Wake, watcher, away-mode, and Relay-specific state mechanics remain with their n
 `docs/sessionstart-nudge.md` owns the native session-open adapter tiers that run or nudge the digest command, and the source routing between them.
 `AGENTS.md` retains the run-once and read-once operator rules, lock-refusal safety, installation consent, and direct-report recovery boundaries because those facts apply at every session start.
 Ordinary dead-direct-report recovery is owned by `stuck-crewmate-recovery`, while persistent-secondmate recovery is owned by `secondmate-provisioning`.
+
+## Private generated data date index (state/generated/data-by-date)
+
+[`bin/fm-data-date-index.sh`](../bin/fm-data-date-index.sh) builds a private, non-authoritative HTML and JSON index of `data/` metadata and links, plus a downloadable archive that contains only those generated views.
+The index classifies canonical operational files, curated memory, reusable references, active or preserved task material, historical evidence, and generated views without treating file age as task completion.
+Structured task creation or closure metadata supplies task dates when available, while a filesystem-mtime fallback is labeled as UTC and uncertain.
+Week groups use the Monday-based ISO week-year so dates at a calendar-year boundary keep an unambiguous year-safe identity.
+Successful brief, spawn, and teardown publication requests a best-effort refresh, and locked session start performs the cheap fingerprint comparison while read-only and context-reemit sessions do not write generated state.
+Run `bin/fm-data-date-index.sh current archive` to print the local private archive path for later authenticated or direct delivery, and do not publish that file on an unauthenticated public URL.
+The script header and `--help` own the schema, fingerprint inputs, confinement, modes, and atomic publication mechanics.
 
 ## Pi Calm preference (config/calm)
 

@@ -80,6 +80,15 @@ esac
 . "$SCRIPT_DIR/fm-classify-lib.sh"
 PAUSED_VERB=${FM_CLASSIFY_PAUSED_VERB:-$FM_CLASSIFY_PAUSED_VERB_DEFAULT}
 
+refresh_data_date_index() {
+  # Test-only path overrides can describe no coherent FM_HOME.
+  # Normal lifecycle calls always use the canonical home paths.
+  [ -z "${FM_DATA_OVERRIDE:-}${FM_STATE_OVERRIDE:-}" ] || return 0
+  if ! FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-data-date-index.sh" refresh >/dev/null; then
+    echo "warning: optional private data date-index refresh failed after brief publication; the brief remains authoritative" >&2
+  fi
+}
+
 resolve_directory_input() {
   local name=$1 path=$2 resolved
   case "$path" in
@@ -322,6 +331,7 @@ if [ "$SECONDMATE_CHARTER" = "{TASK}" ]; then
 else
   echo "scaffolded: $BRIEF (secondmate charter)"
 fi
+refresh_data_date_index
 exit 0
 fi
 
@@ -405,6 +415,7 @@ When the report is complete, append \`done: {one-line conclusion}\` to the statu
 If your findings reveal work that should ship (e.g. you reproduced a bug and the fix is clear), say so in the report; firstmate may promote this task in place, and you would then receive mode-specific ship instructions as a follow-up message.
 EOF
 echo "scaffolded: $BRIEF (scout; replace {TASK})"
+refresh_data_date_index
 exit 0
 fi
 
@@ -573,3 +584,4 @@ Keep it proportionate: skip \`AGENTS.md\` edits for trivial tasks that produced 
 $DOD
 EOF
 echo "scaffolded: $BRIEF (ship, mode=$MODE; replace {TASK})"
+refresh_data_date_index
