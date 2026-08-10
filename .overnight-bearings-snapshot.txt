@@ -1,0 +1,791 @@
+schema: fm-bearings.v1
+home: exedev/kun-agent-workspace
+generated: "2026-08-10T12:47:01Z"
+prs: "not_requested (run: /bearings include PRs)"
+in_flight[23]{id,kind,state,doing}:
+  codex-release-review-audit,ship,done,"run passed: PR merged/closed"
+  firstmate-completed-candidate-integration,ship,unknown,harness state unavailable (unknown codex-unverified)
+  firstmate-continuous-ops-capacity-repair,ship,unknown,harness state unavailable (unknown codex-unverified)
+  firstmate-continuous-ops-v2,ship,unknown,harness state unavailable (unknown codex-unverified)
+  firstmate-main-divergence-reconciliation,ship,unknown,"backend target gone: default:wG:p42"
+  firstmate-recurring-reminders-recovery,ship,unknown,harness state unavailable (unknown codex-unverified)
+  firstmate-slack-socket-mode-inbound,ship,unknown,harness state unavailable (unknown codex-unverified)
+  firstmate-terminal-stale-suppression-recovery,ship,unknown,harness state unavailable (unknown codex-unverified)
+  fleet-legacy-endpoint-cleanup-diagnosis,ship,unknown,harness state unavailable (unknown codex-unverified)
+  fleet-stale-binding-cleanup-wave,ship,unknown,harness state unavailable (unknown codex-unverified)
+  issue-725-standalone-deploy-ordering,ship,done,"run passed: PR merged/closed"
+  issue-756-touch-category-actions,ship,unknown,"backend target gone: default:wF:pE"
+  issue-789-inbox-empty-state,ship,done,"run passed: PR merged/closed"
+  no-mistakes-ci-authoritative-isolated-pilot,ship,unknown,harness state unavailable (unknown codex-unverified)
+  overnight-fleet-report,scout,unknown,harness state unavailable (unknown codex-unverified)
+  portfolio-safe-record-reconciliation,ship,unknown,"backend target gone: default:wG:p5X"
+  pr905-current-main-recert,ship,unknown,"backend target gone: default:wF:p4Y"
+  private-overlay-upgrade-rehearsal,ship,unknown,"backend target gone: default:wG:p2E"
+  social-depot-runner-benchmark,ship,unknown,harness state unavailable (unknown codex-unverified)
+  social-mcp-u4-safe-reads-state,ship,unknown,harness state unavailable (unknown codex-unverified)
+  social-pr-purpose-writing-contract,ship,done,"run passed: PR merged/closed"
+  validation-concurrency-deep-research,ship,unknown,"backend target gone: default:wG:p2D"
+  validation-concurrency-deep-research-upgrade,ship,unknown,worktree gone (torn down?)
+secondmates[1]{id,state,doing,provenance,freshness,age_seconds,contradiction,reason}:
+  social-automate-prep,unknown,"structured home state invalid: live child state has no in-flight backlog item: pr1001-current-main-source-reconcile=unkn…",structured-home,fresh,0,false,"structured home state invalid: live child state has no in-flight backlog item: pr1001-current-main-source-reconcile=unknown"
+decisions_open[116]{id,key,verb,summary,owner}:
+  issue-936-migration-risk-guard-scout-decision-evidence-freshness-window,issue-936-migration-risk-guard-scout-decision-evidence-freshness-window,captain-hold,"Set migration evidence freshness window: Issue #936 report recommends an executable migrat…",(main)
+  issue-936-migration-risk-guard-scout-decision-private-artifact-registry-label,issue-936-migration-risk-guard-scout-decision-private-artifact-registry-label,captain-hold,"Name private migration evidence store: Issue #936 report requires a privacy-safe artifact …",(main)
+  issue-936-migration-risk-guard-scout-decision-github-aggregate-counts,issue-936-migration-risk-guard-scout-decision-github-aggregate-counts,captain-hold,"Decide public aggregate evidence detail: Issue #936 report leaves whether GitHub evidence …",(main)
+  issue-936-migration-risk-guard-scout-decision-low-risk-rationale-authority,issue-936-migration-risk-guard-scout-decision-low-risk-rationale-authority,captain-hold,"Set low-risk rationale approval scope: Issue #936 report leaves whether all existing-table…",(main)
+  issue-936-migration-risk-guard-scout-decision-backup-registry-integration,issue-936-migration-risk-guard-scout-decision-backup-registry-integration,captain-hold,"Choose #896 backup registry integration: Issue #936 report sequences restored-backup evide…",(main)
+  issue-936-migration-risk-guard-scout-decision-private-artifact-labels,issue-936-migration-risk-guard-scout-decision-private-artifact-labels,captain-hold,"Choose migration-preflight private artifact labels: Issue #936 needs canonical non-sensiti…",(main)
+  issue-936-migration-risk-guard-scout-decision-public-aggregate-counts,issue-936-migration-risk-guard-scout-decision-public-aggregate-counts,captain-hold,"Choose whether migration evidence may publish aggregate counts: Issue #936 must decide whe…",(main)
+  issue-936-migration-risk-guard-scout-decision-backup-registry-contract,issue-936-migration-risk-guard-scout-decision-backup-registry-contract,captain-hold,"Choose the future backup registry contract for migration preflight: Issue #936 integration…",(main)
+  issue-424-workflow-priority-scout-decision-default-exclusivity-group,issue-424-workflow-priority-scout-decision-default-exclusivity-group,captain-hold,"Decide workflow default exclusivity group: Issue #424 needs a product decision on whether …",(main)
+  issue-424-workflow-priority-scout-decision-priority-range,issue-424-workflow-priority-scout-decision-priority-range,captain-hold,"Decide workflow priority range: Issue #424 needs a product/API decision on the allowed num…",(main)
+  issue-424-workflow-priority-scout-decision-max-n-initial-scope,issue-424-workflow-priority-scout-decision-max-n-initial-scope,captain-hold,"Decide max-N workflow scope: Issue #424 lists max_n_in_group as optional advanced behavior…",(main)
+  issue-424-workflow-priority-scout-decision-publication-tie-break-direction,issue-424-workflow-priority-scout-decision-publication-tie-break-direction,captain-hold,"Decide workflow publication tie-break: Issue #424 requires stable publication/version time…",(main)
+  issue-424-workflow-priority-scout-decision-conflict-warning-behavior,issue-424-workflow-priority-scout-decision-conflict-warning-behavior,captain-hold,"Decide workflow conflict warning behavior: Issue #424 needs a product decision on whether …",(main)
+  issue-424-workflow-priority-scout-decision-revision-replay-identity,issue-424-workflow-priority-scout-decision-revision-replay-identity,captain-hold,"Decide workflow revision replay identity: Current admission comments mark workflow-version…",(main)
+  issue-424-workflow-priority-scout-decision-manual-idempotency-policy,issue-424-workflow-priority-scout-decision-manual-idempotency-policy,captain-hold,"Decide manual workflow idempotency policy: Manual API and MCP workflow launches currently …",(main)
+  issue-424-workflow-priority-scout-decision-page-global-conflict-policy,issue-424-workflow-priority-scout-decision-page-global-conflict-policy,captain-hold,"Decide page-global workflow conflict policy: Issue #424 must define whether account-wide a…",(main)
+  issue-424-workflow-priority-scout-decision-active-publish-boundary,issue-424-workflow-priority-scout-decision-active-publish-boundary,captain-hold,"Decide workflow active publish boundary: Issue #424 needs immutable effective resolver con…",(main)
+  issue-794-agent-draft-backfill-decision-aggregate-necessity-diagnostic,issue-794-agent-draft-backfill-decision-aggregate-necessity-diagnostic,captain-hold,"Decide whether to measure the #794 historical AgentDraft gap: GitHub and public live-serve…",(main)
+  social-automate-current-priority-candidate-scout-decision-agent-outbound-dm-volume-ceiling-996,social-automate-current-priority-candidate-scout-decision-agent-outbound-dm-volume-ceiling-996,captain-hold,"Choose the quantitative ceiling before agent outbound DM rollout: Issue #996 real v1/MCP s…",(main)
+  social-automate-hidden-feature-completion-scout-decision-live-rbac-rollout,social-automate-hidden-feature-completion-scout-decision-live-rbac-rollout,captain-hold,"Decide the live API-key RBAC rollout contract: Choose the first cohort and confirm that cr…",(main)
+  social-automate-hidden-feature-completion-scout-decision-cron-time-contract,social-automate-hidden-feature-completion-scout-decision-cron-time-contract,captain-hold,"Decide the workflow schedule time and catch-up contract: Choose UTC versus per-account tim…",(main)
+  social-automate-hidden-feature-completion-scout-decision-workflow-admission-contract,social-automate-hidden-feature-completion-scout-decision-workflow-admission-contract,captain-hold,"Decide the canonical workflow trigger retry contract: Choose whether v1 and MCP execution …",(main)
+  social-automate-hidden-feature-completion-scout-decision-ai-economics-provider-policy,social-automate-hidden-feature-completion-scout-decision-ai-economics-provider-policy,captain-hold,"Decide AssemblyAI economics and fallback policy: Choose price/key ownership for AssemblyAI…",(main)
+  social-automate-hidden-feature-completion-scout-decision-durable-action-pilot,social-automate-hidden-feature-completion-scout-decision-durable-action-pilot,captain-hold,"Approve the first durable-action recovery pilot: Choose the first account and operational …",(main)
+  social-automate-hidden-feature-completion-scout-decision-agent-dm-release,social-automate-hidden-feature-completion-scout-decision-agent-dm-release,captain-hold,"Approve the controlled agent DM release contract: Choose the quantitative allowance and fi…",(main)
+  issue-647-api-webhook-docs-scout-decision-api-key-effective-authority-public-wording,issue-647-api-webhook-docs-scout-decision-api-key-effective-authority-public-wording,captain-hold,"Choose public wording for API key effective authority: The source default is dark and acco…",(main)
+  issue-647-api-webhook-docs-scout-decision-outbound-webhook-doc-ownership,issue-647-api-webhook-docs-scout-decision-outbound-webhook-doc-ownership,captain-hold,"Choose canonical ownership for outbound webhook docs: The API reference and Integrations g…",(main)
+  issue-647-api-webhook-docs-scout-decision-legacy-key-audit-audience,issue-647-api-webhook-docs-scout-decision-legacy-key-audit-audience,captain-hold,"Choose the audience for legacy API key audit guidance: The current database audit is opera…",(main)
+  issue-647-api-webhook-docs-scout-decision-public-rate-limit-contract,issue-647-api-webhook-docs-scout-decision-public-rate-limit-contract,captain-hold,"Choose the public API rate-limit contract: Published plan limits conflict with the current…",(main)
+  issue-647-api-webhook-docs-scout-decision-production-rollout-claim,issue-647-api-webhook-docs-scout-decision-production-rollout-claim,captain-hold,"Choose availability wording after rollout verification: Repository history proves landed c…",(main)
+  issue-651-followup-docs-scout-decision-dm-eligibility-contract,issue-651-followup-docs-scout-decision-dm-eligibility-contract,captain-hold,"Choose follow-up DM eligibility contract: Stored follow-up eligibility is seven days",(main)
+  issue-651-followup-docs-scout-decision-pause-semantics,issue-651-followup-docs-scout-decision-pause-semantics,captain-hold,"Choose follow-up sequence pause semantics: The Paused UI stops new audit matching but does…",(main)
+  issue-651-followup-docs-scout-decision-review-surface-batch,issue-651-followup-docs-scout-decision-review-surface-batch,captain-hold,"Choose follow-up review and batch surface: Follow-ups use the separate Reviews surface",(main)
+  issue-651-followup-docs-scout-decision-inert-controls,issue-651-followup-docs-scout-decision-inert-controls,captain-hold,"Choose fate of inert follow-up controls: Trigger modes",(main)
+  issue-651-followup-docs-scout-decision-unreplied-surface,issue-651-followup-docs-scout-decision-unreplied-surface,captain-hold,"Choose supported Unreplied Audit surface: The direct route has no navigation",(main)
+  issue-651-followup-docs-scout-decision-failure-observability,issue-651-followup-docs-scout-decision-failure-observability,captain-hold,"Choose follow-up failure observability launch threshold: Issue 651 requests visible failur…",(main)
+  issue-518-brand-voice-resolution-scout-decision-page-precedence-semantics,issue-518-brand-voice-resolution-scout-decision-page-precedence-semantics,captain-hold,"Choose final Page Brand Voice precedence: Current main has two Page-selection mechanisms; …",(main)
+  issue-518-brand-voice-resolution-scout-decision-fallback-default-selection,issue-518-brand-voice-resolution-scout-decision-fallback-default-selection,captain-hold,"Define interim default selection: Multiple account-wide and Page-scoped profiles are legal",(main)
+  issue-518-brand-voice-resolution-scout-decision-mutation-page-authority,issue-518-brand-voice-resolution-scout-decision-mutation-page-authority,captain-hold,"Define Page-scoped mutation authority: Product and security must choose how settings autho…",(main)
+  issue-518-brand-voice-resolution-scout-decision-brand-voice-read-visibility,issue-518-brand-voice-resolution-scout-decision-brand-voice-read-visibility,captain-hold,"Define Brand Voice read visibility: Current reads are account-wide; selectors and settings…",(main)
+  issue-518-brand-voice-resolution-scout-decision-tree-voice-assignment-authority,issue-518-brand-voice-resolution-scout-decision-tree-voice-assignment-authority,captain-hold,"Define TreeNode voice assignment authority: Categorization authority currently permits arb…",(main)
+  issue-518-brand-voice-resolution-scout-decision-delete-dependency-policy,issue-518-brand-voice-resolution-scout-decision-delete-dependency-policy,captain-hold,"Choose Brand Voice deletion policy: Current deletion silently clears direct Page and TreeN…",(main)
+  issue-518-brand-voice-resolution-scout-decision-audit-durability,issue-518-brand-voice-resolution-scout-decision-audit-durability,captain-hold,"Choose Brand Voice audit durability: The shared audit helper suppresses insert failures",(main)
+  issue-518-brand-voice-resolution-scout-decision-training-review-contract,issue-518-brand-voice-resolution-scout-decision-training-review-contract,captain-hold,"Choose the training review contract: Training currently overwrites the live profile; human…",(main)
+  issue-518-brand-voice-resolution-scout-decision-legacy-invalid-link-remediation,issue-518-brand-voice-resolution-scout-decision-legacy-invalid-link-remediation,captain-hold,"Choose invalid-link remediation: Schema constraints permit historical cross-tenant and cro…",(main)
+  issue-518-brand-voice-resolution-scout-decision-resolver-failure-observability,issue-518-brand-voice-resolution-scout-decision-resolver-failure-observability,captain-hold,"Choose resolver failure behavior: Current runtime silently degrades to no voice; availabil…",(main)
+  issue-518-brand-voice-resolution-scout-decision-dry-run-page-context,issue-518-brand-voice-resolution-scout-decision-dry-run-page-context,captain-hold,"Define dry-run Page context: Dry-run currently omits Brand Voice and uses synthetic Page d…",(main)
+  issue-518-brand-voice-resolution-scout-decision-brand-foundation-resumption,issue-518-brand-voice-resolution-scout-decision-brand-foundation-resumption,captain-hold,"Decide when Brand foundation resumes: The full #518 migration depends on the closed #507 f…",(main)
+  issue-624-platform-policy-resolver-scout-decision-org-scope,issue-624-platform-policy-resolver-scout-decision-org-scope,captain-hold,"Define the Organization policy scope: Current main has no authoritative Organization polic…",(main)
+  issue-624-platform-policy-resolver-scout-decision-brand-scope,issue-624-platform-policy-resolver-scout-decision-brand-scope,captain-hold,"Define the Brand policy scope: BrandVoice is not an authoritative Brand ownership or polic…",(main)
+  issue-624-platform-policy-resolver-scout-decision-protected-taxonomy,issue-624-platform-policy-resolver-scout-decision-protected-taxonomy,captain-hold,"Approve protected-category policy taxonomy: Exact categories claims disclaimers proof rule…",(main)
+  issue-624-platform-policy-resolver-scout-decision-jurisdiction,issue-624-platform-policy-resolver-scout-decision-jurisdiction,captain-hold,"Choose authoritative jurisdiction semantics: No current model establishes legal jurisdicti…",(main)
+  issue-624-platform-policy-resolver-scout-decision-manual-coverage,issue-624-platform-policy-resolver-scout-decision-manual-coverage,captain-hold,"Decide baseline coverage for human effects: Manual sends moderation publishing and forward…",(main)
+  issue-624-platform-policy-resolver-scout-decision-approval-handoff,issue-624-platform-policy-resolver-scout-decision-approval-handoff,captain-hold,"Define approval and handoff conflict semantics: Human approval and handoff are incomparabl…",(main)
+  issue-624-platform-policy-resolver-scout-decision-reason-copy,issue-624-platform-policy-resolver-scout-decision-reason-copy,captain-hold,"Approve policy reason copy and localization: Stable technical codes can land dark but oper…",(main)
+  issue-624-platform-policy-resolver-scout-decision-publication-authority,issue-624-platform-policy-resolver-scout-decision-publication-authority,captain-hold,"Define platform policy publication authority: Dedicated roles quorum separation of duties …",(main)
+  issue-624-platform-policy-resolver-scout-decision-break-glass,issue-624-platform-policy-resolver-scout-decision-break-glass,captain-hold,"Define policy break-glass and rollback authority: Rollback must preserve immutable history…",(main)
+  issue-624-platform-policy-resolver-scout-decision-emergency-semantics,issue-624-platform-policy-resolver-scout-decision-emergency-semantics,captain-hold,"Define emergency-stop linearization and SLA: A last-line database read leaves a dispatch r…",(main)
+  issue-624-platform-policy-resolver-scout-decision-activation-authority,issue-624-platform-policy-resolver-scout-decision-activation-authority,captain-hold,"Define platform baseline activation authority: The first non-overridable activation cohort…",(main)
+  issue-624-platform-policy-resolver-scout-decision-unavailable-state,issue-624-platform-policy-resolver-scout-decision-unavailable-state,captain-hold,"Define activated-policy outage response: Resolver or fresh-state infrastructure failure mu…",(main)
+  issue-624-platform-policy-resolver-scout-decision-evidence-retention,issue-624-platform-policy-resolver-scout-decision-evidence-retention,captain-hold,"Approve policy evidence retention and access: Immutable revisions publication audit and de…",(main)
+  issue-624-platform-policy-resolver-scout-decision-replay-semantics,issue-624-platform-policy-resolver-scout-decision-replay-semantics,captain-hold,"Define historical policy replay semantics: Missing fresh historical facts must be classifi…",(main)
+  issue-624-platform-policy-resolver-scout-decision-action-vocabulary,issue-624-platform-policy-resolver-scout-decision-action-vocabulary,captain-hold,"Approve canonical effect action vocabulary: Publishing moderation deletion forwarding and …",(main)
+  issue-654-workflow-prompt-docs-scout-decision-workflow-scheduling-public-contract,issue-654-workflow-prompt-docs-scout-decision-workflow-scheduling-public-contract,captain-hold,"Decide the public workflow scheduling contract: The visible Scheduled trigger writes node …",(main)
+  issue-654-workflow-prompt-docs-scout-decision-workflow-cron-timezone-rollout,issue-654-workflow-prompt-docs-scout-decision-workflow-cron-timezone-rollout,captain-hold,"Decide cron timezone and rollout contract: Cron uses process-local time and corrected arbi…",(main)
+  issue-654-workflow-prompt-docs-scout-decision-workflow-live-test-safety-contract,issue-654-workflow-prompt-docs-scout-decision-workflow-live-test-safety-contract,captain-hold,"Decide the workflow Live Test safety contract: The UI calls Live Test safe",(main)
+  issue-654-workflow-prompt-docs-scout-decision-workflow-condition-expression-surface,issue-654-workflow-prompt-docs-scout-decision-workflow-condition-expression-surface,captain-hold,"Decide the Advanced Expression surface: The workflow editor persists conditionExpression",(main)
+  issue-654-workflow-prompt-docs-scout-decision-prompt-variable-public-contract,issue-654-workflow-prompt-docs-scout-decision-prompt-variable-public-contract,captain-hold,"Define the public prompt variable contract: Workflow runtime",(main)
+  issue-654-workflow-prompt-docs-scout-decision-lead-classifier-example-contract,issue-654-workflow-prompt-docs-scout-decision-lead-classifier-example-contract,captain-hold,"Decide the Lead Classifier documentation example: Generic dm_opener consumption is source-…",(main)
+  issue-654-workflow-prompt-docs-scout-decision-automation-rule-test-contract,issue-654-workflow-prompt-docs-scout-decision-automation-rule-test-contract,captain-hold,"Decide the Automation Rules test contract: The UI offers All active rules",(main)
+  issue-654-workflow-prompt-docs-scout-decision-automation-rule-action-truth,issue-654-workflow-prompt-docs-scout-decision-automation-rule-action-truth,captain-hold,"Decide Automation Rules action and smart-input truth: Email notification has no effect",(main)
+  issue-657-getting-started-docs-scout-decision-meta-release-coupling,issue-657-getting-started-docs-scout-decision-meta-release-coupling,captain-hold,"Choose issue 657 Meta documentation release coupling: Decide whether the non-Meta document…",(main)
+  issue-657-getting-started-docs-scout-decision-mobile-tour-replay-contract,issue-657-getting-started-docs-scout-decision-mobile-tour-replay-contract,captain-hold,"Choose the mobile tour replay contract: Decide whether public docs should describe replay …",(main)
+  issue-657-getting-started-docs-scout-decision-public-screenshot-policy,issue-657-getting-started-docs-scout-decision-public-screenshot-policy,captain-hold,"Choose issue 657 public screenshot scope: Decide the public viewport set and whether separ…",(main)
+  issue-896-backup-posture-scout-decision-retention-objectives,issue-896-backup-posture-scout-decision-retention-objectives,captain-hold,"Decide backup retention and recovery objectives: Choose tier counts or age windows",(main)
+  issue-896-backup-posture-scout-decision-prune-and-capacity-policy,issue-896-backup-posture-scout-decision-prune-and-capacity-policy,captain-hold,"Decide destructive pruning and disk reserve policy: Choose disk and inode reserve",(main)
+  issue-896-backup-posture-scout-decision-offsite-retention-and-trust,issue-896-backup-posture-scout-decision-offsite-retention-and-trust,captain-hold,"Decide off-site retention and trust contract: Choose mirror versus independent retention",(main)
+  issue-896-backup-posture-scout-decision-scheduler-and-lock-policy,issue-896-backup-posture-scout-decision-scheduler-and-lock-policy,captain-hold,"Decide backup scheduler and locking policy: Choose cron versus systemd",(main)
+  issue-896-backup-posture-scout-decision-alert-delivery-policy,issue-896-backup-posture-scout-decision-alert-delivery-policy,captain-hold,"Decide backup alert delivery semantics: Choose channels",(main)
+  issue-896-backup-posture-scout-decision-restore-proof-authority-and-privacy,issue-896-backup-posture-scout-decision-restore-proof-authority-and-privacy,captain-hold,"Decide restore-proof authority and privacy boundary: Choose whether and where real backup …",(main)
+  issue-896-backup-posture-scout-decision-installation-and-activation,issue-896-backup-posture-scout-decision-installation-and-activation,captain-hold,"Decide privileged backup rollout ownership: Choose deploy",(main)
+  issue-896-backup-posture-scout-decision-legacy-restore-disposition,issue-896-backup-posture-scout-decision-legacy-restore-disposition,captain-hold,"Decide destructive legacy restore disposition: Choose remove",(main)
+  issue-896-backup-posture-scout-decision-schema-rollback-compatibility,issue-896-backup-posture-scout-decision-schema-rollback-compatibility,captain-hold,"Decide restored-schema rollback compatibility: Choose the supported image and schema compa…",(main)
+  issue-423-long-term-architecture-scout-decision-ceiling-editor-authority,issue-423-long-term-architecture-scout-decision-ceiling-editor-authority,captain-hold,"Choose who may edit the Workspace contact ceiling: Activation needs one authorization cont…",(main)
+  issue-423-long-term-architecture-scout-decision-ceiling-window-contract,issue-423-long-term-architecture-scout-decision-ceiling-window-contract,captain-hold,"Set the Workspace ceiling window contract: Activation needs explicit minimum and maximum v…",(main)
+  social-mcp-phase3-plan-decision-public-capability-scope,social-mcp-phase3-plan-decision-public-capability-scope,captain-hold,"Choose public MCP capability scope: Phase 3 activation needs the exact capability domains …",(main)
+  social-mcp-phase3-plan-decision-api-key-ai-review-authority,social-mcp-phase3-plan-decision-api-key-ai-review-authority,captain-hold,"Define API-key authority for AI-review decisions: AI-review parity needs a product and sec…",(main)
+  social-mcp-phase3-plan-decision-api-key-grant-authority,social-mcp-phase3-plan-decision-api-key-grant-authority,captain-hold,"Define API-key authority for contact grants: Exact-contact grants are human membership aut…",(main)
+  social-mcp-phase3-plan-decision-public-auth-posture,social-mcp-phase3-plan-decision-public-auth-posture,captain-hold,"Choose public MCP authentication posture: External MCP productization needs a decision bet…",(main)
+  social-mcp-phase3-plan-decision-destructive-confirmation-policy,social-mcp-phase3-plan-decision-destructive-confirmation-policy,captain-hold,"Define destructive MCP confirmation policy: Destructive agent actions need one approved co…",(main)
+  social-mcp-phase3-plan-decision-legacy-cutover-retirement,social-mcp-phase3-plan-decision-legacy-cutover-retirement,captain-hold,"Set MCP legacy cutover and retirement criteria: The modern and legacy generations may over…",(main)
+  social-mcp-first-cohort-release-preparation-decision-readiness-build-preflight,social-mcp-first-cohort-release-preparation-decision-readiness-build-preflight,captain-hold,"Decide whether MCP v2 post-P3-4 readiness authorizes exact build and standalone preflight:…",(main)
+  social-mcp-first-cohort-release-preparation-decision-cohort-limits,social-mcp-first-cohort-release-preparation-decision-cohort-limits,captain-hold,"Set MCP v2 first-cohort quantitative limits and operational thresholds: Measured post-P3-4…",(main)
+  social-mcp-first-cohort-release-preparation-decision-exact-deployment,social-mcp-first-cohort-release-preparation-decision-exact-deployment,captain-hold,"Authorize or refuse one exact MCP v2 production deployment: After exact source",(main)
+  social-mcp-first-cohort-release-preparation-decision-named-account,social-mcp-first-cohort-release-preparation-decision-named-account,captain-hold,"Name or refuse one consenting MCP v2 first-cohort account: Only after exact deployment evi…",(main)
+  social-mcp-first-cohort-release-preparation-decision-named-account-activation,social-mcp-first-cohort-release-preparation-decision-named-account-activation,captain-hold,"Authorize or refuse bounded MCP v2 activation for one named account: After deployment",(main)
+  social-automate-prep/social-automate-next-work-cto-plan-decision-cto-operating-model,social-automate-next-work-cto-plan-decision-cto-operating-model,captain-hold,"Choose the Social Automate engineering-lead operating model: Nobody currently owns Social …",social-automate-prep
+  social-automate-prep/issue-685-agentnode-dry-run-prep-decision-dry-run-real-inference-spend,issue-685-agentnode-dry-run-prep-decision-dry-run-real-inference-spend,captain-hold,Is an admin dry-run tester that spends real AI tokens on the account credential acceptable…,social-automate-prep
+  social-automate-prep/social-billing-product-contract-decision-delinquency-restriction,social-billing-product-contract-decision-delinquency-restriction,captain-hold,"What a delinquent (past_due) customer loses, and the delinquency grace length: Determines …",social-automate-prep
+  social-automate-prep/social-billing-product-contract-decision-payer-unit,social-billing-product-contract-decision-payer-unit,captain-hold,"Billing payer unit: Account per-workspace vs user or organisation: Each user may own up to…",social-automate-prep
+  social-automate-prep/social-billing-product-contract-decision-entitlement-grant-authority,social-billing-product-contract-decision-entitlement-grant-authority,captain-hold,"Who may hand-grant or revoke an entitlement, and may an OWNER self-start a trial: A hand-g…",social-automate-prep
+  social-automate-prep/social-billing-product-contract-decision-trial-policy,social-billing-product-contract-decision-trial-policy,captain-hold,"Trial commercial parameters: existence, length, card-required, and end behaviour: Card-req…",social-automate-prep
+  social-automate-prep/social-billing-product-contract-decision-charged-rollback-remedy,social-billing-product-contract-decision-charged-rollback-remedy,captain-hold,"Money remedy when a release is rolled back after real customers were charged: A code rollb…",social-automate-prep
+  social-automate-prep/social-billing-product-contract-decision-tax-and-jurisdiction,social-billing-product-contract-decision-tax-and-jurisdiction,captain-hold,"Stripe Tax posture, sale jurisdictions, and tax-inclusive vs exclusive catalog prices: Det…",social-automate-prep
+  social-automate-prep/social-billing-market-model-research-decision-plan-upgrade-driver,social-billing-market-model-research-decision-plan-upgrade-driver,captain-hold,"Commercial model: what separates the paid tiers: Page capacity",social-automate-prep
+  social-automate-prep/social-billing-market-model-research-decision-page-capacity-unit,social-billing-market-model-research-decision-page-capacity-unit,captain-hold,"Commercial model: unit for page capacity add-ons: Capacity can be priced per connected pag…",social-automate-prep
+  social-automate-prep/social-billing-market-model-research-decision-ai-unit-denomination,social-billing-market-model-research-decision-ai-unit-denomination,captain-hold,"Commercial model: how the customer-facing AI unit is denominated: Product action with a pu…",social-automate-prep
+  social-automate-prep/social-billing-market-model-research-decision-ai-unit-sold-or-included,social-billing-market-model-research-decision-ai-unit-sold-or-included,captain-hold,"Commercial model: are AI units sold as a balance or only included in a plan: Selling a bal…",social-automate-prep
+  social-automate-prep/social-billing-market-model-research-decision-allowance-exhaustion-posture,social-billing-market-model-research-decision-allowance-exhaustion-posture,captain-hold,"Commercial model: what happens when a customer exhausts the AI allowance mid-period: Hard …",social-automate-prep
+  social-automate-prep/social-billing-market-model-research-decision-auto-replenishment-consent,social-billing-market-model-research-decision-auto-replenishment-consent,captain-hold,"Commercial model: whether and how to offer automatic account funding: Auto-funding is wher…",social-automate-prep
+  social-automate-prep/social-billing-market-model-research-decision-byok-fee-stance,social-billing-market-model-research-decision-byok-fee-stance,captain-hold,"Commercial model: how a bring-your-own-key enterprise customer is charged: Fixed platform …",social-automate-prep
+  social-automate-prep/social-billing-market-model-research-decision-outcome-pricing-pilot,social-billing-market-model-research-decision-outcome-pricing-pilot,captain-hold,"Commercial model: whether to pursue outcome pricing and what a billable qualified lead is:…",social-automate-prep
+  social-automate-prep/social-open-issues-merged-pr-audit-decision-agent-node-turn-controls,social-open-issues-merged-pr-audit-decision-agent-node-turn-controls,captain-hold,"AgentNode inactivity and max-turn controls: restore the editor controls now that the runti…",social-automate-prep
+  social-automate-prep/social-open-issues-merged-pr-audit-decision-publishing-surface-scope-defacto,social-open-issues-merged-pr-audit-decision-publishing-surface-scope-defacto,captain-hold,"Publishing surface scope: the fence option already shipped in code without a recorded deci…",social-automate-prep
+  social-automate-prep/social-agent-ready-api-mcp-coverage-decision-manual-send-gate,social-agent-ready-api-mcp-coverage-decision-manual-send-gate,captain-hold,Do human Inbox sends become subject to the #566 action gate when the duplicated send and r…,social-automate-prep
+  social-automate-prep/social-automate-ranked-live-work-pass-decision-contact-row-semantics-817,social-automate-ranked-live-work-pass-decision-contact-row-semantics-817,captain-hold,"Issue #817 scope: Inbox contact-row semantics and test surface: Issue #817 is confirmed li…",social-automate-prep
+landed[20]{id,what,artifact,owner}:
+  validation-major-fault-readonly-attribution,Attribute the 47 validation major faults without changing the server,data/validation-major-fault-readonly-attribution/report.md,(main)
+  social-recent-data-ready-work-delta-audit,Find the next Social Automate coding batch,data/social-recent-data-ready-work-delta-audit/report.md,(main)
+  social-mcp-phase3-modern-catalog,Build the bounded MCP Phase 3 modern catalog,"https://github.com/Click-Enterprise/social-automate/pull/1131",(main)
+  social-mcp-phase3-discovery-resources,Add authorized MCP capability discovery and read-only resources,"https://github.com/Click-Enterprise/social-automate/pull/1135",(main)
+  social-mcp-p34-implementation-preparation,Prepare MCP P3-4 discovery and resources,data/social-mcp-p34-implementation-preparation/report.md,(main)
+  social-mcp-first-cohort-release-preparation,Prepare MCP first-cohort release evidence,data/social-mcp-first-cohort-release-preparation/report.md,(main)
+  pr1005-conflict-source-reconcile,SUPERSEDED - PR 1005 merged 2026-08-09; this reconcile is no longer ne…,"-",social-automate-prep
+  pr1001-current-main-source-reconcile,Reconcile PR 1001 onto current main (source),"-",social-automate-prep
+  openapi-spec-missing-403-503,Published OpenAPI spec omits 403 and 503 that the v1 API returns,"-",social-automate-prep
+  issue-996-truthful-send,"P0: v1 and MCP message send report success without sending","-",social-automate-prep
+  issue-987-chart-series-contract,Route every Recharts series colour through one CHART_SERIES contract,"-",social-automate-prep
+  issue-984-local-visual-baseline,Add local mobile and tablet visual baselines for #984,"https://github.com/Click-Enterprise/social-automate/pull/1134",(main)
+  issue-978-dashboard-selectors-from-registry,Derive dashboard platform selectors and limits from the capability reg…,"-",social-automate-prep
+  issue-864-default-personal-inbox-views-publication,Publish default personal Inbox views for review,"https://github.com/Click-Enterprise/social-automate/pull/1132",(main)
+  issue-764-residual-mobile-card-twins,Add residual mobile card twins for #764,"https://github.com/Click-Enterprise/social-automate/pull/1133",(main)
+  issue-704-saved-view-fallback-hardening,Harden saved-view fallback evaluation and route parity,"https://github.com/Click-Enterprise/social-automate/pull/1130",(main)
+  issue-649-page-permission-matrix-enforcement,Enforce the six-level Page-permission matrix uniformly across dashboar…,"https://github.com/Click-Enterprise/social-automate/pull/1128",social-automate-prep
+  inbox-contact-sharing-first-release-held-intake,"Held intake: first Inbox contact-sharing release, blocked on five secu…","-",social-automate-prep
+  inbox-composer-discards-typed-text-p1,"P1 LIVE: Inbox comment composer discards every keystroke when no saved…","-",social-automate-prep
+  deploy-backup-failure-is-swallowed,"LOWER PRIORITY until a destructive migration approaches: deploy backup…","-",social-automate-prep
+gates[114]{id,title,blocked_by,reason,owner}:
+  issue-817-inbox-contact-row-semantics,Remove nested Inbox contact-row controls for #817,"-",Captain-bounded final interaction attemp…,(main)
+  issue-759-residual-touch-targets,Complete residual Inbox touch targets for #759,"-",Captain-bounded final proof attempt stop…,(main)
+  bearings-live-state-diagnosis,Diagnose Bearings live-state misclassification against prese…,"-",Clean Bearings repair is ready at da842e…,(main)
+  issue-864-default-personal-inbox-views-recovery,Recover and finish #864 default personal Inbox views candida…,"-",Local recovery is clean at f2f169f79,(main)
+  firstmate-main-retained-candidate-integration,Prepare retained Firstmate candidate for guarded local landi…,"-","Guarded fast-forward refused: candidate …",(main)
+  issue-794-agent-draft-backfill,"Add a dark, super-admin-only one-shot AgentDraft backfill","-","Necessity remains unproven: deployed new…",(main)
+  firstmate-slack-milestone-delivery,Make Slack milestone delivery reliable and auditable,"-",Captain reported false PR-merge spam; al…,(main)
+  nm-matrix-retry1-lane-b,Run corrected-criterion matrix retry 1 lane B,"-",Retry stopped on row-K major-fault crite…,(main)
+  nm-matrix-retry1-lane-a,Run corrected-criterion matrix retry 1 lane A,"-",Retry stopped on row-K major-fault crite…,(main)
+  nm-matrix-lane-b-cycle2,"Run No Mistakes two-lane isolation matrix lane B, cycle 2","-",Matrix stopped on nonzero swap; unpublis…,(main)
+  nm-matrix-lane-a-cycle2,"Run No Mistakes two-lane isolation matrix lane A, cycle 2","-",Matrix stopped on nonzero swap; PR 3 and…,(main)
+  bearings-secondmate-snapshot-timeout-fix,Fix Bearings secondmate snapshot timeout without losing live…,"-",External PR path is retired by captain d…,(main)
+  firstmate-legacy-project-tree-retirement,Add guarded retirement path and retire the approved legacy p…,"-",PR 1354 is open with conflicts; captain …,(main)
+  issue-893-dm-autonomy-plan,Create implementation-ready plan for issue #893 DM autonomy …,"-",Release completed and production verifie…,(main)
+  issue-545-entitlement-policy,Implement #545 commercial entitlement and effective-tier pol…,"-",Wait for #778 production verification,(main)
+  firstmate-terminal-blocked-stale-suppression,Stop repeated stale alerts for terminal work blocked on an a…,"-",Private ready branch 97631a37 preserved …,(main)
+  firstmate-release-batching-protocol,Add risk-based release batching protocol to Firstmate,"-",PR 1099 closed at captain request; lates…,(main)
+  firstmate-owned-extension-framework-scout,Build owned extension framework Stage 0 proof of concept,"-",Validated head fe04b3ed075c73119d8a4a7b7…,(main)
+  issue-816-enforce-session-controls,Define and enforce AGENT node turn and inactivity controls,"-",Prepared delivery order 10; wait behind …,(main)
+  firstmate-recurring-captain-reminders,Add recurring reminders for unresolved captain-action blocke…,"-",Three unpublished local commits are pres…,(main)
+  issue-893-dm-autonomy-observability,Preserve rejected #893 implementation evidence,"-",Rejected implementation contains a cross…,(main)
+  issue-935-immutable-compose-identity,Pin production Compose to immutable image identity,"-",release complete but cleanup safely refu…,(main)
+  capability-registry-b2,Implement the approved capability registry and supported-net…,"-",disqualified old head 1877d21e is preser…,(main)
+  firstmate-plain-language-github-writing,Make plain-language GitHub writing durable in Firstmate,"-",Unpublished local commit 0533fb6 is pres…,(main)
+  issue-605-exemption-expiry,Implement approved billing exemption expiry semantics for #6…,issue-894-entitlement-write-authority,Billing foundation reactivated; wait beh…,(main)
+  issue-586-settings-permission-nav,Filter Settings navigation by role and permissions,"-",awaiting serialized staged release; redu…,(main)
+  issue-774-scheduled-cron-time,Use scheduled event time for flag-off workflow ticks,"-",wait until draft PRs 798 and 803 release…,(main)
+  pr798-dark-release-preflight,Run the conditional #803 then #798 dark-release preflight,"-",wait for draft PR 803 to land dark befor…,(main)
+  issue-699-inbound-staged-ramp,Stage #699 durable inbound shadow ramp and controlled activa…,"-",wait for PR 798 dark-release gates and a…,(main)
+  account-suspension-enforcement,Enforce risk-off account suspension with quarantined intake,"-",Broad #859 suspension program remains de…,(main)
+  issue-606-exemption-subscription,Reject and reconcile exemption plus live subscription for #6…,"issue-545-entitlement-policy,issue-605-exemption-expiry","-",(main)
+  ai-false-promise-harness,Build a shadow-first selective AI false-promise harness,"-",start only when broad agent_auto_send av…,(main)
+  deferred-product-directions,Preserve deferred product directions and reconsideration tri…,"-",revisit only when the named customer-dem…,(main)
+  treehouse-v2-1-lease-trial,Run staged Treehouse 2.1.1 lease-identity trial,"-",Start only with zero live Treehouse pool…,(main)
+  no-mistakes-v1-40-3-trial,Run staged No Mistakes 1.45.4 update trial,"-",Start only in a declared maintenance win…,(main)
+  slack-axi-reporting-trial,Run isolated slack-axi reporting trial,"-",Await dedicated non-customer Slack test …,(main)
+  social-deploy-newest-cumulative-job,Deploy only the newest cumulative exact Social Automate SHA,issue-935-immutable-compose-identity,"-",(main)
+  social-automate-community-fake-door-test,Run scoped one-community seven-day acquisition fake-door tes…,"-",captain deferred the market-demand fake-…,(main)
+  no-mistakes-ci-authoritative-isolated-pilot,Preserve isolated No Mistakes CI-authoritative pilot artifac…,"-",Local pilot artifact is preserved pendin…,(main)
+  pi-082-restart-verification,Restart Pi 0.82.1 and verify current Firstmate commands,"-",Current visible Pi session must restart …,(main)
+  codex870-inbound-alert-await,File PR #870 unawaited inbound-failure alert finding,"-",Confirmed live on current main 99b3b5bf …,(main)
+  codex872-takeover-replay-integrity,Fix stale MessageDecision after takeover release replay,"-",One of four findings is confirmed live o…,(main)
+  codex879-billing-exemption-correctness-cluster,Preserve PR #879 billing-correction evidence for any #605 re…,"-","Not a live main defect: repaired on pres…",(main)
+  codex-release-review-audit-cleanup,Reconcile legacy endpoint ownership and clean up completed C…,"-",Await targeted legacy endpoint ownership…,(main)
+  parked-commercial-demand-and-billing,Park commercial demand validation and billing activation,"-",Foundation engineering active; demand ou…,(main)
+  parked-inbox-contact-sharing,Park first-class Inbox contact sharing and permissions,"-",Member-only Viewer and Collaborator firs…,(main)
+  parked-building-block-economy,Park building-block economy and API discovery,"-",captain parked until explicit reactivati…,(main)
+  parked-no-mistakes-remote-validation,Park disposable remote validation experiments,"-",captain parked until explicit reactivati…,(main)
+  parked-discarded-build-policy,Park discarded-build policy questions,"-",captain parked until explicit reactivati…,(main)
+  production-comment-identity-readonly-investigation-resume,Resume bounded read-only production Comment identity investi…,"-",Await an existing technically enforced r…,(main)
+  issue-894-entitlement-write-authority,Build one protected entitlement-input write path for #894,issue-545-entitlement-policy,"-",(main)
+  billing-webhook-event-integrity,"Add billing event history, idempotency, and ordering protect…",issue-606-exemption-subscription,"-",(main)
+  billing-stripe-test-mode-integration,Integrate Stripe in test mode behind dark billing gates,billing-webhook-event-integrity,Wait for preceding billing steps and rem…,(main)
+  restore-social-automate-claude-coordinator,Restore Social Automate second-mate coordinator to configure…,"-",Wait until Claude weekly quota reset at …,(main)
+  firstmate-preserved-task-hibernation-recheck,Reconsider preserved-session hibernation only when memory pr…,"-",Defer until measurable memory pressure r…,(main)
+  suspension-guidance-consolidation,Consolidate account-suspension contributor guidance after #9…,account-suspension-enforcement,"-",(main)
+  social-staging-infrastructure,Provision isolated Social Automate staging infrastructure,"-",deferred until Social Automate has users…,(main)
+  tracker-axi-open-source-extraction,Extract proven GitHub intake into an AXI-compliant tracker t…,firstmate-continuous-ops-v2,"-",(main)
+  herdr-080-upgrade-trial,Run staged Herdr 0.8.0-or-newer upgrade trial,"-",needs maintenance window with zero live …,(main)
+  pi-084-upgrade-trial,Run staged Pi 0.84.1 upgrade and restart verification,"-",needs explicit captain approval for visi…,(main)
+  fleet-ambiguous-preserved-work-research,Resolve ambiguous preserved fleet ownership and recovery pat…,fleet-legacy-endpoint-cleanup-diagnosis,"-",(main)
+  issue-424-workflow-priority-scout,"Design workflow priority, exclusivity, and conflict resoluti…","-",Scout report is complete; wait for its s…,(main)
+  gh-social-automate-404,"GitHub #404: Agent architecture: end-to-end QA and setup val…","-",Issue requires real configured-page/prov…,(main)
+  gh-social-automate-682,"GitHub #682: confidence- and risk-gated AgentNode autonomy","-",Security-policy implementation depends o…,(main)
+  gh-social-automate-683,"GitHub #683: enforce runtime escalation rules for AgentNode …","-",Runtime escalation is security/legal pol…,(main)
+  gh-social-automate-421,"GitHub #421: Keyword and phrase triggers for inbound DMs and…","-",Keyword triggers depend on unfinished #4…,(main)
+  gh-social-automate-550,"GitHub #550: Flagship outcome onboarding: qualify and route …","-",Flagship onboarding is a multi-system pr…,(main)
+  gh-no-mistakes-277,"GitHub #277: OpenCode + DeepSeek V4 structured review fails …","-",Requires current OpenCode/DeepSeek struc…,(main)
+  gh-no-mistakes-278,"GitHub #278: Windows: agent steps fail with \"claude returned…","-",Windows-specific npm shim/stdout defect …,(main)
+  gh-no-mistakes-354,"GitHub #354: Single shared daemon serializes runs across wor…","-",Overlaps the private run-identity/two-la…,(main)
+  gh-no-mistakes-391,"GitHub #391: test step: `claude exited: exit status 1` when …","-",External optional work; not an owned-del…,(main)
+  gh-no-mistakes-392,"GitHub #392: test step exits 1 despite all tests passing (ag…","-",External optional work; not an owned-del…,(main)
+  gh-no-mistakes-407,"GitHub #407: Agent exit-1 with empty stderr fails the whole …","-",External optional work; not an owned-del…,(main)
+  gh-no-mistakes-464,"GitHub #464: feat(config): add test.evidence.compact to cont…","-",External optional process feature; defer…,(main)
+  gh-no-mistakes-482,"GitHub #482: Feature: purpose-aware model and effort profile…","-",External optional process feature; defer…,(main)
+  gh-no-mistakes-485,"GitHub #485: Large steps (fix-tests) fail with \"argument lis…","-",External optional work; not an owned-del…,(main)
+  gh-no-mistakes-519,"GitHub #519: test step re-enters auto-fix rounds and never t…","-",External optional work; not an owned-del…,(main)
+  gh-no-mistakes-529,"GitHub #529: Feature request: skip or shrink the test-eviden…","-",External optional process feature; defer…,(main)
+  gh-no-mistakes-546,"GitHub #546: Document ActionSkip retains a pre-gate commit; …","-",External optional work; not an owned-del…,(main)
+  gh-no-mistakes-552,"GitHub #552: Push/PR target inferred from local branch name …","-",External optional work; not an owned-del…,(main)
+  gh-no-mistakes-554,"GitHub #554: claude adapter discards a fully-successful resu…","-",External optional work; not an owned-del…,(main)
+  gh-no-mistakes-606,"GitHub #606: PR body corruption: spliced CI log text is doub…","-",External optional work; not an owned-del…,(main)
+  gh-no-mistakes-646,"GitHub #646: feat(config): agree a pr: config surface for re…","-",External optional process feature; defer…,(main)
+  gh-no-mistakes-674,"GitHub #674: opencode-backed review step hangs indefinitely …","-",External optional work; not an owned-del…,(main)
+  gh-no-mistakes-681,"GitHub #681: push step should refuse to commit files under t…","-",External optional work; not an owned-del…,(main)
+  issue-419-timezone-scheduling-implementation,Implement the approved timezone scheduling contract for issu…,"-",Architecture approved; implementation pr…,(main)
+  gh-social-automate-480,"GitHub #480: feat: integrate promptfoo as the eval harness f…","-",Promptfoo evaluation recommends defer be…,(main)
+  gh-social-automate-654,"GitHub #654: docs: refresh workflows & prompts guides — test…","-",Completed issue 654 source scout found e…,(main)
+  gh-no-mistakes-690,"GitHub #690: Proposal: fall back to Actions runs when check …","-",External optional work in kunchenguid/no…,(main)
+  gh-social-automate-657,"GitHub #657: docs: refresh getting started — onboarding tour…","issue-657-getting-started-docs-scout-decision-meta-release-coupling,issue-657-getting-started-docs-scout-decision-mobile…","-",(main)
+  social-release-de206ab20,Release current Social Automate main through the Depot proof…,"-",No production release authorized; durabl…,(main)
+  issue-767-usability-guard-coverage,Preserve issue #767 residual guard-architecture scope,"-",Deliberately future-held by the captain;…,(main)
+  social-mcp-first-cohort-readiness,Prepare the MCP first cohort for safe activation,social-mcp-u7-exclusions-readiness,"-",(main)
+  social-mcp-u5-safe-authoring,Add MCP no-send safe authoring,social-mcp-u4-safe-reads-state,"-",(main)
+  social-mcp-u6-operator-context,Add MCP safe operator context and configuration,social-mcp-u5-safe-authoring,"-",(main)
+  social-mcp-u7-exclusions-readiness,Enforce MCP exclusions and complete dark readiness docs,social-mcp-u6-operator-context,"-",(main)
+  pr-1069-post-merge-release-preflight,SUPERSEDED - preflight was for 7c8193a8; main is now 4284f2c…,issue-827-inbox-composer-direction-a,Preflight DELIVERED; awaiting captain de…,social-automate-prep
+  contact-sharing-shared-with-me-cap-source-plan,"Source plan: cap the Shared-with-me payload","-",Complete and preserved; not landed.,social-automate-prep
+  sa-text-muted-light-dark-audit,Audit --sa-text-muted across light and dark usage and add a …,"-",Prepared branch exists; do not dispatch.,social-automate-prep
+  issue-792-economics-dispatch-token,Prevent concurrent economics redispatch before enforcement,"-","Prepared: gate landed",social-automate-prep
+  issue-861-capacity-state-enforcement-phase-b,Implement autonomous capacity enforcement on the Phase A sta…,agentdraft-capacity-index-map-fix,Parked by main firstmate; do not start u…,social-automate-prep
+  issue-792-economics-activation-readiness,Activation readiness for ai_economics_capture at volume,"-",Do NOT dispatch. Became structurally rea…,social-automate-prep
+  codex877-waiver-tracked-inactive,Track PR 877 accessible-name findings as waived-inactive,"-",Do NOT dispatch. This is a TRACKING reco…,social-automate-prep
+  pr932-c1-implementation-owned-by-main,PR932 C1 implementation owned by main firstmate via issue 97…,"-",Do NOT dispatch. Pointer record only; MA…,social-automate-prep
+  refused-pre-inference-settlement-release-requirement,REFUSED_PRE_INFERENCE settlement is a binding prerequisite f…,"-",Do NOT dispatch or implement today. Bind…,social-automate-prep
+  openrouter-ai-sdk-integration-plan-decision-openrouter-data-handling-posture,"May production customer content traverse OpenRouter, and und…","-",FUTURE-HELD by captain deferral 2026-07-…,social-automate-prep
+  openrouter-ai-sdk-integration-plan-decision-openrouter-stage1b-production-scope,Is the four-call-site advisory allowlist acceptable as inter…,"-",FUTURE-HELD by captain deferral 2026-07-…,social-automate-prep
+  openrouter-ai-sdk-integration-plan-decision-openrouter-pilot-spend-ceiling,Hard spend ceiling and exhaustion behaviour for the platform…,"-",FUTURE-HELD by captain deferral 2026-07-…,social-automate-prep
+  openrouter-ai-sdk-integration-plan-decision-openrouter-stage2-fallback-policy,Stage 2 product-task behaviour when OpenRouter is unavailabl…,"-",FUTURE-HELD by captain deferral 2026-07-…,social-automate-prep
+  openrouter-ai-sdk-integration-plan-decision-openrouter-commercial-posture,"Markup, included credits, and who bears provider spend for a…","-",FUTURE-HELD by captain deferral 2026-07-…,social-automate-prep
+  issue-860-fresh-implementation-owned-by-main,#860 fresh implementation owned by main firstmate,"-",Do NOT dispatch or implement. Pointer re…,social-automate-prep
+  ds-accent-neutral-confirms-986,Record neutral-accent decision against published Inbox dark-…,"-",Captain decided KEEP NEUTRAL. Decision r…,social-automate-prep
+  ds-third-party-surfaces-deferred,Third-party /docs and /api-reference kept specialized; deepe…,"-",Boundary and deferral record only. Capta…,social-automate-prep
+  issue-767-usability-guard-coverage,Preserve issue #767 residual usability-guard architecture sc…,"-",Captain approved Option B preserve issue…,social-automate-prep
+reports[218]{id,path}:
+  additional-parallel-tasks-social-automate,/home/exedev/kun-agent-workspace/data/additional-parallel-tasks-social-automate/report.md
+  admin-config-environment-targeting-diagnosis,/home/exedev/kun-agent-workspace/data/admin-config-environment-targeting-diagnosis/report.md
+  agent-collaboration-tooling-audit,/home/exedev/kun-agent-workspace/data/agent-collaboration-tooling-audit/report.md
+  agentdraft-capacity-index-drift-diagnosis,/home/exedev/kun-agent-workspace/data/agentdraft-capacity-index-drift-diagnosis/report.md
+  app-security-state-root-cause,/home/exedev/kun-agent-workspace/data/app-security-state-root-cause/report.md
+  bearings-live-state-diagnosis,/home/exedev/kun-agent-workspace/data/bearings-live-state-diagnosis/report.md
+  bearings-owned-local-repair,/home/exedev/kun-agent-workspace/data/bearings-owned-local-repair/report.md
+  bearings-pr-findings-sync-investigation,/home/exedev/kun-agent-workspace/data/bearings-pr-findings-sync-investigation/report.md
+  bearings-terminal-artifact-classification,/home/exedev/kun-agent-workspace/data/bearings-terminal-artifact-classification/report.md
+  blocked-dependencies-843-844,/home/exedev/kun-agent-workspace/data/blocked-dependencies-843-844/report.md
+  building-block-economy-internal-discovery,/home/exedev/kun-agent-workspace/data/building-block-economy-internal-discovery/report.md
+  building-block-economy-stage-plan,/home/exedev/kun-agent-workspace/data/building-block-economy-stage-plan/report.md
+  captain-calls-freshness-audit,/home/exedev/kun-agent-workspace/data/captain-calls-freshness-audit/report.md
+  captain-open-choices-html-report,/home/exedev/kun-agent-workspace/data/captain-open-choices-html-report/report.md
+  captain-pages-decision-report-audit,/home/exedev/kun-agent-workspace/data/captain-pages-decision-report-audit/report.md
+  certification-coordinator-independent-trial,/home/exedev/kun-agent-workspace/data/certification-coordinator-independent-trial/report.md
+  certification-coordinator-recovery-v2-diagnosis,/home/exedev/kun-agent-workspace/data/certification-coordinator-recovery-v2-diagnosis/report.md
+  chatwoot-findings-issue-audit,/home/exedev/kun-agent-workspace/data/chatwoot-findings-issue-audit/report.md
+  chatwoot-findings-issue-tracker,/home/exedev/kun-agent-workspace/data/chatwoot-findings-issue-tracker/report.md
+  chatwoot-issue-metadata,/home/exedev/kun-agent-workspace/data/chatwoot-issue-metadata/report.md
+  chatwoot-pr-mining,/home/exedev/kun-agent-workspace/data/chatwoot-pr-mining/report.md
+  claude-account-session-continuity-scout,/home/exedev/kun-agent-workspace/data/claude-account-session-continuity-scout/report.md
+  code-review-graph-readonly-benchmark,/home/exedev/kun-agent-workspace/data/code-review-graph-readonly-benchmark/report.md
+  codex-release-review-audit,/home/exedev/kun-agent-workspace/data/codex-release-review-audit/report.md
+  data-date-organization-impact-scout,/home/exedev/kun-agent-workspace/data/data-date-organization-impact-scout/report.md
+  data-generated-date-index,/home/exedev/kun-agent-workspace/data/data-generated-date-index/report.md
+  data-recent-notes-gap-audit,/home/exedev/kun-agent-workspace/data/data-recent-notes-gap-audit/report.md
+  decision-recommendations-2026-07-20,/home/exedev/kun-agent-workspace/data/decision-recommendations-2026-07-20/report.md
+  dependabot-955-readiness-scout,/home/exedev/kun-agent-workspace/data/dependabot-955-readiness-scout/report.md
+  dependabot-956-icon-compat-scout,/home/exedev/kun-agent-workspace/data/dependabot-956-icon-compat-scout/report.md
+  dependabot-957-node-floor-scout,/home/exedev/kun-agent-workspace/data/dependabot-957-node-floor-scout/report.md
+  dependabot-958-readiness-scout,/home/exedev/kun-agent-workspace/data/dependabot-958-readiness-scout/report.md
+  dependency-preflight-841-842,/home/exedev/kun-agent-workspace/data/dependency-preflight-841-842/report.md
+  exe-dev-integration-recommendations,/home/exedev/kun-agent-workspace/data/exe-dev-integration-recommendations/report.md
+  fake-door-setup-html-guide,/home/exedev/kun-agent-workspace/data/fake-door-setup-html-guide/report.md
+  firstmate-ahoy-command-trigger-diagnosis,/home/exedev/kun-agent-workspace/data/firstmate-ahoy-command-trigger-diagnosis/report.md
+  firstmate-calm-command-trigger-diagnosis,/home/exedev/kun-agent-workspace/data/firstmate-calm-command-trigger-diagnosis/report.md
+  firstmate-hermes-agent-patterns,/home/exedev/kun-agent-workspace/data/firstmate-hermes-agent-patterns/report.md
+  firstmate-hermes-quality-review-b,/home/exedev/kun-agent-workspace/data/firstmate-hermes-quality-review-b/report.md
+  firstmate-hermes-spec-review-a,/home/exedev/kun-agent-workspace/data/firstmate-hermes-spec-review-a/report.md
+  firstmate-hermes-spec-review-a2,/home/exedev/kun-agent-workspace/data/firstmate-hermes-spec-review-a2/report.md
+  firstmate-orphan-worktree-chat-audit,/home/exedev/kun-agent-workspace/data/firstmate-orphan-worktree-chat-audit/report.md
+  firstmate-owned-extension-framework-scout,/home/exedev/kun-agent-workspace/data/firstmate-owned-extension-framework-scout/report.md
+  firstmate-preserved-task-hibernation,/home/exedev/kun-agent-workspace/data/firstmate-preserved-task-hibernation/report.md
+  fleet-inventory-reconciliation-audit,/home/exedev/kun-agent-workspace/data/fleet-inventory-reconciliation-audit/report.md
+  fleet-legacy-endpoint-cleanup-diagnosis,/home/exedev/kun-agent-workspace/data/fleet-legacy-endpoint-cleanup-diagnosis/report.md
+  fleet-stale-worktree-landed-rescan,/home/exedev/kun-agent-workspace/data/fleet-stale-worktree-landed-rescan/report.md
+  github-release-milestone-backfill,/home/exedev/kun-agent-workspace/data/github-release-milestone-backfill/report.md
+  herdr-session-disposition-audit,/home/exedev/kun-agent-workspace/data/herdr-session-disposition-audit/report.md
+  inbox-first-class-sharing-design,/home/exedev/kun-agent-workspace/data/inbox-first-class-sharing-design/report.md
+  inbox-hover-actions-regression,/home/exedev/kun-agent-workspace/data/inbox-hover-actions-regression/report.md
+  inbox-non-ai-zero-count-diagnosis,/home/exedev/kun-agent-workspace/data/inbox-non-ai-zero-count-diagnosis/report.md
+  inbox-unread-always-empty-diagnosis,/home/exedev/kun-agent-workspace/data/inbox-unread-always-empty-diagnosis/report.md
+  issue-419-released-timezone-reconciliation,/home/exedev/kun-agent-workspace/data/issue-419-released-timezone-reconciliation/report.md
+  issue-419-timezone-decision-independent-review,/home/exedev/kun-agent-workspace/data/issue-419-timezone-decision-independent-review/report.md
+  issue-419-timezone-scheduling-scout,/home/exedev/kun-agent-workspace/data/issue-419-timezone-scheduling-scout/report.md
+  issue-423-long-term-architecture-scout,/home/exedev/kun-agent-workspace/data/issue-423-long-term-architecture-scout/report.md
+  issue-424-workflow-priority-scout,/home/exedev/kun-agent-workspace/data/issue-424-workflow-priority-scout/report.md
+  issue-480-promptfoo-spike-scout,/home/exedev/kun-agent-workspace/data/issue-480-promptfoo-spike-scout/report.md
+  issue-510-long-term-contract-resolution-scout,/home/exedev/kun-agent-workspace/data/issue-510-long-term-contract-resolution-scout/report.md
+  issue-510-outcome-event-contract-scout,/home/exedev/kun-agent-workspace/data/issue-510-outcome-event-contract-scout/report.md
+  issue-518-brand-voice-resolution-scout,/home/exedev/kun-agent-workspace/data/issue-518-brand-voice-resolution-scout/report.md
+  issue-518-long-term-brand-architecture-scout,/home/exedev/kun-agent-workspace/data/issue-518-long-term-brand-architecture-scout/report.md
+  issue-609-migration-readiness-scout,/home/exedev/kun-agent-workspace/data/issue-609-migration-readiness-scout/report.md
+  issue-624-long-term-policy-architecture-scout,/home/exedev/kun-agent-workspace/data/issue-624-long-term-policy-architecture-scout/report.md
+  issue-624-platform-policy-resolver-scout,/home/exedev/kun-agent-workspace/data/issue-624-platform-policy-resolver-scout/report.md
+  issue-624-policy-property-model,/home/exedev/kun-agent-workspace/data/issue-624-policy-property-model/report.md
+  issue-647-api-webhook-docs-scout,/home/exedev/kun-agent-workspace/data/issue-647-api-webhook-docs-scout/report.md
+  issue-651-followup-docs-scout,/home/exedev/kun-agent-workspace/data/issue-651-followup-docs-scout/report.md
+  issue-654-workflow-prompt-docs-scout,/home/exedev/kun-agent-workspace/data/issue-654-workflow-prompt-docs-scout/report.md
+  issue-657-getting-started-docs-scout,/home/exedev/kun-agent-workspace/data/issue-657-getting-started-docs-scout/report.md
+  issue-718-independent-deep-security-review,/home/exedev/kun-agent-workspace/data/issue-718-independent-deep-security-review/report.md
+  issue-723-reconciliation-decomposition,/home/exedev/kun-agent-workspace/data/issue-723-reconciliation-decomposition/report.md
+  issue-725-current-applicability-scout,/home/exedev/kun-agent-workspace/data/issue-725-current-applicability-scout/report.md
+  issue-746-hubspot-auth-posture,/home/exedev/kun-agent-workspace/data/issue-746-hubspot-auth-posture/report.md
+  issue-775-close-resolved,/home/exedev/kun-agent-workspace/data/issue-775-close-resolved/report.md
+  issue-777-prerequisite-contract-reconciliation,/home/exedev/kun-agent-workspace/data/issue-777-prerequisite-contract-reconciliation/report.md
+  issue-860-capability-registry-plan,/home/exedev/kun-agent-workspace/data/issue-860-capability-registry-plan/report.md
+  issue-864-long-term-product-architecture-scout,/home/exedev/kun-agent-workspace/data/issue-864-long-term-product-architecture-scout/report.md
+  issue-893-dm-autonomy-plan,/home/exedev/kun-agent-workspace/data/issue-893-dm-autonomy-plan/report.md
+  issue-896-backup-posture-scout,/home/exedev/kun-agent-workspace/data/issue-896-backup-posture-scout/report.md
+  issue-896-long-term-backup-architecture-scout,/home/exedev/kun-agent-workspace/data/issue-896-long-term-backup-architecture-scout/report.md
+  issue-936-migration-risk-guard-scout,/home/exedev/kun-agent-workspace/data/issue-936-migration-risk-guard-scout/report.md
+  issue-945-suspension-predicate-plan,/home/exedev/kun-agent-workspace/data/issue-945-suspension-predicate-plan/report.md
+  issue-949-branch-reconciliation-scout,/home/exedev/kun-agent-workspace/data/issue-949-branch-reconciliation-scout/report.md
+  issue-985-tone-helper-tracking,/home/exedev/kun-agent-workspace/data/issue-985-tone-helper-tracking/report.md
+  main-inventory-orphan-reconciliation,/home/exedev/kun-agent-workspace/data/main-inventory-orphan-reconciliation/report.md
+  migration-milestone-curation,/home/exedev/kun-agent-workspace/data/migration-milestone-curation/report.md
+  new-user-invite-account-prerequisite-diagnosis,/home/exedev/kun-agent-workspace/data/new-user-invite-account-prerequisite-diagnosis/report.md
+  next-five-issues-refresh,/home/exedev/kun-agent-workspace/data/next-five-issues-refresh/report.md
+  next-five-social-automate-issues,/home/exedev/kun-agent-workspace/data/next-five-social-automate-issues/report.md
+  next-issues-review-a,/home/exedev/kun-agent-workspace/data/next-issues-review-a/report.md
+  next-issues-review-b,/home/exedev/kun-agent-workspace/data/next-issues-review-b/report.md
+  next-issues-review-c,/home/exedev/kun-agent-workspace/data/next-issues-review-c/report.md
+  next-issues-review-d,/home/exedev/kun-agent-workspace/data/next-issues-review-d/report.md
+  next-issues-review-e,/home/exedev/kun-agent-workspace/data/next-issues-review-e/report.md
+  next-lane-billing-security-readiness-scout,/home/exedev/kun-agent-workspace/data/next-lane-billing-security-readiness-scout/report.md
+  next-lane-runtime-readiness-scout,/home/exedev/kun-agent-workspace/data/next-lane-runtime-readiness-scout/report.md
+  next-pr-set-social-automate,/home/exedev/kun-agent-workspace/data/next-pr-set-social-automate/report.md
+  nm-ci-green-zombie-recovery-scout,/home/exedev/kun-agent-workspace/data/nm-ci-green-zombie-recovery-scout/report.md
+  nm-cireadytomerge-deferral-close,/home/exedev/kun-agent-workspace/data/nm-cireadytomerge-deferral-close/report.md
+  no-mistakes-ci-authoritative-isolated-pilot,/home/exedev/kun-agent-workspace/data/no-mistakes-ci-authoritative-isolated-pilot/report.md
+  no-mistakes-ci-authoritative-local-adoption,/home/exedev/kun-agent-workspace/data/no-mistakes-ci-authoritative-local-adoption/report.md
+  no-mistakes-cross-task-ci-autofix-leak-scout,/home/exedev/kun-agent-workspace/data/no-mistakes-cross-task-ci-autofix-leak-scout/report.md
+  no-mistakes-gate-push-rejection-diagnosis,/home/exedev/kun-agent-workspace/data/no-mistakes-gate-push-rejection-diagnosis/report.md
+  openai-503-fox-diagnosis,/home/exedev/kun-agent-workspace/data/openai-503-fox-diagnosis/report.md
+  pi-agent-config-approved-package,/home/exedev/kun-agent-workspace/data/pi-agent-config-approved-package/report.md
+  pi-agent-config-gap-audit,/home/exedev/kun-agent-workspace/data/pi-agent-config-gap-audit/report.md
+  pi-compaction-synthetic-trial,/home/exedev/kun-agent-workspace/data/pi-compaction-synthetic-trial/report.md
+  portfolio-safe-record-reconciliation,/home/exedev/kun-agent-workspace/data/portfolio-safe-record-reconciliation/report.md
+  postiz-deep-pr-mining,/home/exedev/kun-agent-workspace/data/postiz-deep-pr-mining/report.md
+  postiz-pr-mining,/home/exedev/kun-agent-workspace/data/postiz-pr-mining/report.md
+  pr-1072-codex-comments-audit,/home/exedev/kun-agent-workspace/data/pr-1072-codex-comments-audit/report.md
+  pr-843-jsdom-major-readiness,/home/exedev/kun-agent-workspace/data/pr-843-jsdom-major-readiness/report.md
+  pr-886-unpublished-commit-reconciliation,/home/exedev/kun-agent-workspace/data/pr-886-unpublished-commit-reconciliation/report.md
+  pr-891-release-readiness-reconciliation,/home/exedev/kun-agent-workspace/data/pr-891-release-readiness-reconciliation/report.md
+  pr-916-next-patch-readiness,/home/exedev/kun-agent-workspace/data/pr-916-next-patch-readiness/report.md
+  pr-writing-preference-processing-diagnosis,/home/exedev/kun-agent-workspace/data/pr-writing-preference-processing-diagnosis/report.md
+  pr798-waiting-analysis,/home/exedev/kun-agent-workspace/data/pr798-waiting-analysis/report.md
+  pr846-readiness-plan,/home/exedev/kun-agent-workspace/data/pr846-readiness-plan/report.md
+  pr879-paying-subscriber-downgrade-adjudication,/home/exedev/kun-agent-workspace/data/pr879-paying-subscriber-downgrade-adjudication/report.md
+  pr891-backup-restore-drill,/home/exedev/kun-agent-workspace/data/pr891-backup-restore-drill/report.md
+  preflight-github-artifacts,/home/exedev/kun-agent-workspace/data/preflight-github-artifacts/report.md
+  preflight-green-preserved,/home/exedev/kun-agent-workspace/data/preflight-green-preserved/report.md
+  preflight-merge-queue,/home/exedev/kun-agent-workspace/data/preflight-merge-queue/report.md
+  preflight-pr798,/home/exedev/kun-agent-workspace/data/preflight-pr798/report.md
+  preflight-pr870,/home/exedev/kun-agent-workspace/data/preflight-pr870/report.md
+  preflight-pr876,/home/exedev/kun-agent-workspace/data/preflight-pr876/report.md
+  preflight-pr904,/home/exedev/kun-agent-workspace/data/preflight-pr904/report.md
+  preflight-pr905,/home/exedev/kun-agent-workspace/data/preflight-pr905/report.md
+  private-overlay-upgrade-rehearsal,/home/exedev/kun-agent-workspace/data/private-overlay-upgrade-rehearsal/report.md
+  production-comment-identity-migration-recovery,/home/exedev/kun-agent-workspace/data/production-comment-identity-migration-recovery/report.md
+  release-batch-834-857,/home/exedev/kun-agent-workspace/data/release-batch-834-857/report.md
+  release-visual-changes-48h,/home/exedev/kun-agent-workspace/data/release-visual-changes-48h/report.md
+  release-visual-last24h,/home/exedev/kun-agent-workspace/data/release-visual-last24h/report.md
+  secondmate-hibernation-deferral-close,/home/exedev/kun-agent-workspace/data/secondmate-hibernation-deferral-close/report.md
+  social-acceleration-plan-rescope,/home/exedev/kun-agent-workspace/data/social-acceleration-plan-rescope/report.md
+  social-automate-12-hour-plan-refresh,/home/exedev/kun-agent-workspace/data/social-automate-12-hour-plan-refresh/report.md
+  social-automate-acquisition-wedge,/home/exedev/kun-agent-workspace/data/social-automate-acquisition-wedge/report.md
+  social-automate-activation-path,/home/exedev/kun-agent-workspace/data/social-automate-activation-path/report.md
+  social-automate-building-block-economy,/home/exedev/kun-agent-workspace/data/social-automate-building-block-economy/report.md
+  social-automate-commercial-demand,/home/exedev/kun-agent-workspace/data/social-automate-commercial-demand/report.md
+  social-automate-community-fake-door-test,/home/exedev/kun-agent-workspace/data/social-automate-community-fake-door-test/report.md
+  social-automate-current-priority-candidate-scout,/home/exedev/kun-agent-workspace/data/social-automate-current-priority-candidate-scout/report.md
+  social-automate-design-system-audit,/home/exedev/kun-agent-workspace/data/social-automate-design-system-audit/report.md
+  social-automate-hidden-feature-completion-scout,/home/exedev/kun-agent-workspace/data/social-automate-hidden-feature-completion-scout/report.md
+  social-automate-pending-pr-disposition,/home/exedev/kun-agent-workspace/data/social-automate-pending-pr-disposition/report.md
+  social-automate-retrospective-insight-activation-plan,/home/exedev/kun-agent-workspace/data/social-automate-retrospective-insight-activation-plan/report.md
+  social-automate-rich-pr-writing-scout,/home/exedev/kun-agent-workspace/data/social-automate-rich-pr-writing-scout/report.md
+  social-automate-success-levers,/home/exedev/kun-agent-workspace/data/social-automate-success-levers/report.md
+  social-automate-system-readiness-gap-audit,/home/exedev/kun-agent-workspace/data/social-automate-system-readiness-gap-audit/report.md
+  social-backup-only-proof-f28029bb,/home/exedev/kun-agent-workspace/data/social-backup-only-proof-f28029bb/report.md
+  social-backup-restore-drill-post-hardening,/home/exedev/kun-agent-workspace/data/social-backup-restore-drill-post-hardening/report.md
+  social-build-failures-last-24h-audit,/home/exedev/kun-agent-workspace/data/social-build-failures-last-24h-audit/report.md
+  social-ci-build-test-deploy-timing-scout,/home/exedev/kun-agent-workspace/data/social-ci-build-test-deploy-timing-scout/report.md
+  social-compose-hardening-roadmap-plan,/home/exedev/kun-agent-workspace/data/social-compose-hardening-roadmap-plan/report.md
+  social-continuous-delivery-guardrails,/home/exedev/kun-agent-workspace/data/social-continuous-delivery-guardrails/report.md
+  social-copilotkit-dev-server-research,/home/exedev/kun-agent-workspace/data/social-copilotkit-dev-server-research/report.md
+  social-deploy-04f60320,/home/exedev/kun-agent-workspace/data/social-deploy-04f60320/report.md
+  social-deploy-development-history-reconstruction,/home/exedev/kun-agent-workspace/data/social-deploy-development-history-reconstruction/report.md
+  social-deploy-f28029bb,/home/exedev/kun-agent-workspace/data/social-deploy-f28029bb/report.md
+  social-deploy-failures-last-48h-reconciliation,/home/exedev/kun-agent-workspace/data/social-deploy-failures-last-48h-reconciliation/report.md
+  social-deployment-platform-counterfactual-audit,/home/exedev/kun-agent-workspace/data/social-deployment-platform-counterfactual-audit/report.md
+  social-depot-cache-registry-optimization,/home/exedev/kun-agent-workspace/data/social-depot-cache-registry-optimization/report.md
+  social-depot-release-gap-audit,/home/exedev/kun-agent-workspace/data/social-depot-release-gap-audit/report.md
+  social-depot-runner-benchmark,/home/exedev/kun-agent-workspace/data/social-depot-runner-benchmark/report.md
+  social-design-system-issue-publication,/home/exedev/kun-agent-workspace/data/social-design-system-issue-publication/report.md
+  social-discarded-build-root-cause-scout,/home/exedev/kun-agent-workspace/data/social-discarded-build-root-cause-scout/report.md
+  social-feature-initiative-map,/home/exedev/kun-agent-workspace/data/social-feature-initiative-map/report.md
+  social-github-eligibility-full-rescan,/home/exedev/kun-agent-workspace/data/social-github-eligibility-full-rescan/report.md
+  social-github-milestone-project-sync,/home/exedev/kun-agent-workspace/data/social-github-milestone-project-sync/report.md
+  social-github-roadmap-project-update,/home/exedev/kun-agent-workspace/data/social-github-roadmap-project-update/report.md
+  social-github-roadmap-timeline-plan,/home/exedev/kun-agent-workspace/data/social-github-roadmap-timeline-plan/report.md
+  social-hosted-codex-build-waste-30d-scout,/home/exedev/kun-agent-workspace/data/social-hosted-codex-build-waste-30d-scout/report.md
+  social-inbox-milestone-refresh,/home/exedev/kun-agent-workspace/data/social-inbox-milestone-refresh/report.md
+  social-mcp-first-cohort-release-preparation,/home/exedev/kun-agent-workspace/data/social-mcp-first-cohort-release-preparation/report.md
+  social-mcp-p34-implementation-preparation,/home/exedev/kun-agent-workspace/data/social-mcp-p34-implementation-preparation/report.md
+  social-mcp-phase3-plan,/home/exedev/kun-agent-workspace/data/social-mcp-phase3-plan/report.md
+  social-merged-not-deployed-audit,/home/exedev/kun-agent-workspace/data/social-merged-not-deployed-audit/report.md
+  social-new-code-projects-batch-plan,/home/exedev/kun-agent-workspace/data/social-new-code-projects-batch-plan/report.md
+  social-new-code-projects-inventory,/home/exedev/kun-agent-workspace/data/social-new-code-projects-inventory/report.md
+  social-new-code-projects-value-ranking,/home/exedev/kun-agent-workspace/data/social-new-code-projects-value-ranking/report.md
+  social-next-feature-design-priority-refresh,/home/exedev/kun-agent-workspace/data/social-next-feature-design-priority-refresh/report.md
+  social-nm-certification-serialization-audit,/home/exedev/kun-agent-workspace/data/social-nm-certification-serialization-audit/report.md
+  social-open-pr-deploy-readiness-audit,/home/exedev/kun-agent-workspace/data/social-open-pr-deploy-readiness-audit/report.md
+  social-open-pr-readiness-ranking,/home/exedev/kun-agent-workspace/data/social-open-pr-readiness-ranking/report.md
+  social-post-release-launch-list-refresh,/home/exedev/kun-agent-workspace/data/social-post-release-launch-list-refresh/report.md
+  social-pr-batch-dependency-plan,/home/exedev/kun-agent-workspace/data/social-pr-batch-dependency-plan/report.md
+  social-prepared-certification-fifo-reconciliation,/home/exedev/kun-agent-workspace/data/social-prepared-certification-fifo-reconciliation/report.md
+  social-priority-records-audit,/home/exedev/kun-agent-workspace/data/social-priority-records-audit/report.md
+  social-ready-eligibility-reaudit,/home/exedev/kun-agent-workspace/data/social-ready-eligibility-reaudit/report.md
+  social-ready-queue-bootstrap,/home/exedev/kun-agent-workspace/data/social-ready-queue-bootstrap/report.md
+  social-recent-data-ready-work-delta-audit,/home/exedev/kun-agent-workspace/data/social-recent-data-ready-work-delta-audit/report.md
+  social-release-4284f2ca-candidate,/home/exedev/kun-agent-workspace/data/social-release-4284f2ca-candidate/report.md
+  social-release-4284f2ca-deploy,/home/exedev/kun-agent-workspace/data/social-release-4284f2ca-deploy/report.md
+  social-release-5d0820d80,/home/exedev/kun-agent-workspace/data/social-release-5d0820d80/report.md
+  social-release-7694369bb,/home/exedev/kun-agent-workspace/data/social-release-7694369bb/report.md
+  social-release-bundle-opportunity-audit,/home/exedev/kun-agent-workspace/data/social-release-bundle-opportunity-audit/report.md
+  social-release-e734be8ac,/home/exedev/kun-agent-workspace/data/social-release-e734be8ac/report.md
+  social-release-ghcr-403-diagnosis,/home/exedev/kun-agent-workspace/data/social-release-ghcr-403-diagnosis/report.md
+  social-release-preflight-f28029bb,/home/exedev/kun-agent-workspace/data/social-release-preflight-f28029bb/report.md
+  social-secondmate-orphan-child-reconciliation,/home/exedev/kun-agent-workspace/data/social-secondmate-orphan-child-reconciliation/report.md
+  social-secondmate-ready-scout-handoff,/home/exedev/kun-agent-workspace/data/social-secondmate-ready-scout-handoff/report.md
+  social-shipping-automation-ownership-audit,/home/exedev/kun-agent-workspace/data/social-shipping-automation-ownership-audit/report.md
+  social-unavailable-work-reconciliation,/home/exedev/kun-agent-workspace/data/social-unavailable-work-reconciliation/report.md
+  social-visual-interface-weekly-inventory,/home/exedev/kun-agent-workspace/data/social-visual-interface-weekly-inventory/report.md
+  stars-agent-devtool-scout,/home/exedev/kun-agent-workspace/data/stars-agent-devtool-scout/report.md
+  stars-growth-analytics-scout,/home/exedev/kun-agent-workspace/data/stars-growth-analytics-scout/report.md
+  stars-runtime-infra-scout,/home/exedev/kun-agent-workspace/data/stars-runtime-infra-scout/report.md
+  stars-security-testing-scout,/home/exedev/kun-agent-workspace/data/stars-security-testing-scout/report.md
+  stars-social-agent-framework-scout,/home/exedev/kun-agent-workspace/data/stars-social-agent-framework-scout/report.md
+  stars-ui-design-a11y-scout,/home/exedev/kun-agent-workspace/data/stars-ui-design-a11y-scout/report.md
+  today-due-date-sync,/home/exedev/kun-agent-workspace/data/today-due-date-sync/report.md
+  tooling-plugin-skill-scout,/home/exedev/kun-agent-workspace/data/tooling-plugin-skill-scout/report.md
+  validation-concurrency-deep-research,/home/exedev/kun-agent-workspace/data/validation-concurrency-deep-research/report.md
+  validation-major-fault-readonly-attribution,/home/exedev/kun-agent-workspace/data/validation-major-fault-readonly-attribution/report.md
+  validation-swap-readonly-diagnosis,/home/exedev/kun-agent-workspace/data/validation-swap-readonly-diagnosis/report.md
+  validation-two-lane-matrix-retry,/home/exedev/kun-agent-workspace/data/validation-two-lane-matrix-retry/report.md
+recorded_prs[9]{id,url}:
+  bearings-secondmate-snapshot-timeout-fix,"https://github.com/kunchenguid/firstmate/pull/1364"
+  firstmate-legacy-project-tree-retirement,"https://github.com/kunchenguid/firstmate/pull/1354"
+  firstmate-release-batching-protocol,"https://github.com/kunchenguid/firstmate/pull/1099"
+  issue-605-exemption-expiry,"https://github.com/ChrisGutierrezNet/social-automate/pull/879"
+  issue-725-standalone-deploy-ordering,"https://github.com/ChrisGutierrezNet/social-automate/pull/891"
+  issue-756-touch-category-actions,"https://github.com/ChrisGutierrezNet/social-automate/pull/874"
+  pr905-current-main-recert,"https://github.com/ChrisGutierrezNet/social-automate/pull/905"
+  social-depot-runner-benchmark,"https://github.com/Click-Enterprise/social-automate-ci-benchmark/pull/1"
+  social-pr-purpose-writing-contract,"https://github.com/Click-Enterprise/social-automate/pull/1096"
+unhealthy_endpoints[13]{id,backend,target,exists,agent}:
+  bearings-secondmate-snapshot-timeout-fix,herdr,"default:wG:p1Z",false,not_checked
+  codex-release-review-audit,herdr,"default:wF:p1M",false,not_checked
+  firstmate-legacy-project-tree-retirement,herdr,"default:wG:p1W",false,not_checked
+  firstmate-main-divergence-reconciliation,herdr,"default:wG:p42",false,not_checked
+  issue-605-exemption-expiry,herdr,"default:wF:pW",false,not_checked
+  issue-725-standalone-deploy-ordering,herdr,"default:wF:p1R",false,not_checked
+  issue-756-touch-category-actions,herdr,"default:wF:pE",false,not_checked
+  issue-789-inbox-empty-state,herdr,"default:wF:p3E",false,not_checked
+  portfolio-safe-record-reconciliation,herdr,"default:wG:p5X",false,not_checked
+  pr905-current-main-recert,herdr,"default:wF:p4Y",false,not_checked
+  private-overlay-upgrade-rehearsal,herdr,"default:wG:p2E",false,not_checked
+  social-pr-purpose-writing-contract,herdr,"default:wG:p3N",false,not_checked
+  validation-concurrency-deep-research,herdr,"default:wG:p2D",false,not_checked
+bodies[176]{id,body}:
+  issue-774-scheduled-cron-time,"- [ ] issue-774-scheduled-cron-time - Use scheduled event time for flag-off workflow ticks (repo: social-automate) (kind: ship) (since 2026-07-20) (hold: wait until draft PRs 798 and 803 release src/l…"
+  pr798-dark-release-preflight,"Source: data/decision-recommendations-2026-07-20/resolved-decisions.md. Sequence is mandatory: #803 lands dark first; synchronize #798 to resulting main; freshly gate it; then collect immediate zero-d…"
+  issue-699-inbound-staged-ramp,"Source: data/decision-recommendations-2026-07-20/resolved-decisions.md. Only after #798's dark-release gates may durable intake enter a measured shadow canary. inbound_active_processing remains forbid…"
+  account-suspension-enforcement,"Readiness evidence: `data/next-lane-billing-security-readiness-scout/report.md`. The parent suspension program is not one implementation lane. GitHub issue #859 is decomposed into open children #945-#…"
+  issue-606-exemption-subscription,"Readiness evidence: `data/next-lane-billing-security-readiness-scout/report.md`. The approved invariant remains: an active billing exemption plus live Stripe subscription is invalid admin state. Curre…"
+  ai-false-promise-harness,"Source: data/decision-recommendations-2026-07-20/resolved-decisions.md. Before broad agent_auto_send, measure a labeled corpus, use a deterministic prefilter, invoke a constrained second classifier on…"
+  deferred-product-directions,"Source: data/decision-recommendations-2026-07-20/resolved-decisions.md. Do not start implementation. Revisit agency sub-tenancy only with verified customer demand and then use a real Account to Client…"
+  treehouse-v2-1-lease-trial,"Supersedes the queued 2.1.0 target because 2.1.1 is now available. Run only with zero live Treehouse pool work and zero active validation; verify lease identity, allocation, return, rollback, and Firs…"
+  no-mistakes-v1-40-3-trial,Supersedes the queued 1.40.3 target. Current active build is v1.45.3-6-g67cc589 and v1.45.4 is available. Start only in a maintenance window with zero nonterminal validation runs; preserve rollback an…
+  slack-axi-reporting-trial,"- [ ] slack-axi-reporting-trial - Run isolated slack-axi reporting trial (repo: social-automate) (kind: scout) (since 2026-07-23) (hold: Await dedicated non-customer Slack test channel plus approved l…"
+  social-deploy-newest-cumulative-job,"After immutable deployment identity #935 lands, implement the separately isolated deployment-workflow architecture: move concurrency from the whole workflow to only the production-mutating deploy job;…"
+  social-automate-community-fake-door-test,The captain accepted the recommendation on 2026-07-27 to remove this market-demand fake-door test from active work and defer it unless explicitly reopened. The prior preparation remains a historical a…
+  no-mistakes-ci-authoritative-isolated-pilot,"Local pilot commit 1b6564c and hash-pinned binary remain preserved in the recorded isolated copy. Do not run disposable-remote smoke, publish, discard, or clean up without separate captain authority."
+  pi-082-restart-verification,"# Captain decision: restart Pi now and verify commands Date: 2026-07-27 UTC The captain authorized: `RESTART PI NOW AND VERIFY COMMANDS`. Restart the current visible Pi process in place from `/home/ex…"
+  codex870-inbound-alert-await,"Revalidated 2026-07-29 against current main 99b3b5bf after PR #870 merged. CONFIRMED LIVE: src/lib/webhooks/inbound/legacy-path.ts launches sendSlackAlert without awaiting it at lines 134 and 153, inc…"
+  codex872-takeover-replay-integrity,"Revalidated 2026-07-29 against current main 99b3b5bf. PR #872 closed unmerged; its intent was reimplemented and shipped through PR #932 at 00b0d7ef. Of four audited findings: F1 release-before-replay …"
+  codex879-billing-exemption-correctness-cluster,The five filed PR #879 billing findings were revalidated during P1 adjudication. All are repaired on preserved branch fm/issue-605-exemption-expiry at e43e679a and all implicated feature code is absen…
+  codex-release-review-audit-cleanup,"The audit report and captain disposition are complete, but fm-teardown safely refused because legacy Herdr endpoint metadata for codex-release-review-audit lacks an exact task binding. Preserve report…"
+  parked-commercial-demand-and-billing,"Captain reactivated billing-foundation engineering on 2026-07-31 without requiring prior demand validation. This item now preserves only the still-parked commercial and activation surfaces: no outreac…"
+  parked-inbox-contact-sharing,"Captain resolved three first-release product choices on 2026-07-31: - `grantee-boundary`: only existing live members of the contact-owning account may receive a first-release grant. No groups, invitat…"
+  parked-building-block-economy,"Captain parked this lane on 2026-07-30. Preserve evidence; no external discovery, outreach, adapter implementation, field-contract activation, or hosted read API. Reactivate only on explicit captain d…"
+  parked-no-mistakes-remote-validation,"Captain parked this lane on 2026-07-30. Preserve the local pilot; no disposable remote, fork, external smoke, or canonical-repository use. Reactivate only on explicit captain direction. Decision: data…"
+  parked-discarded-build-policy,"Captain parked this lane on 2026-07-30. Preserve the diagnosis; no remedy prioritization, deferral-accounting policy, evidence threshold, or ordinary-iteration sampling. Reactivate only on explicit ca…"
+  production-comment-identity-readonly-investigation-resume,Captain authorized only the hash-verified PR #919 read-only inspection contract recorded at data/production-comment-identity-migration-recovery/read-only-access-captain-decision.md. Use an existing te…
+  issue-894-entitlement-write-authority,"Captain-approved billing foundation step 4, after #545. Implement one derivation-and-write seam for every entitlement input: derive resulting access from recorded evidence, persist evidence and projec…"
+  billing-webhook-event-integrity,"Captain-approved billing foundation step 6 after #606. Add durable event-id history, duplicate-event idempotency, event-recency ordering so late updates cannot resurrect terminal state, mode-aware evi…"
+  billing-stripe-test-mode-integration,"Captain-approved billing foundation step 7 after event integrity. Through separately bounded implementation slices, add a mode-fenced typed Stripe client, test-mode checkout/portal, total price-to-pla…"
+  restore-social-automate-claude-coordinator,"At or after 2026-08-02 22:00 UTC, preserve all child workers and validation state, stop only the temporary Codex coordinator, and relaunch the same persistent second-mate home through the configured c…"
+  firstmate-preserved-task-hibernation-recheck,"Captain deferred implementation. Re-open only after measurable memory pressure recurs; re-measure swap, pressure, reclaimable worker memory, and unaffected shared-service memory before proposing work."
+  suspension-guidance-consolidation,"After #947, #946, and #951 complete the #859 adopter sequence, reduce CLAUDE.md's growing adopter enumeration to load-bearing invariants and pointers to src/lib/account-suspension/README.md, surfaces.…"
+  social-staging-infrastructure,Provision the separately isolated staging target required to activate automatic staging and low-risk production delivery. Do not start until the captain reopens this investment based on user traction.
+  tracker-axi-open-source-extraction,"After Continuous Operations v2 proves its evidence schema against Social Automate, evaluate extraction into a reusable open-source tracker-axi companion: gh-axi remains GitHub transport, tasks-axi rem…"
+  herdr-080-upgrade-trial,"Current Herdr 0.7.4 is below Firstmate's 0.8.0 presentation-space floor. Upgrade only in a declared maintenance window with zero live Herdr workers; verify runtime backend, exact endpoint identity, fo…"
+  pi-084-upgrade-trial,"Current Pi coding agent is 0.82.1 and 0.84.1 is available. Upgrade only with explicit captain approval for the visible-session restart; verify current Firstmate extensions, commands, model selection, …"
+  fleet-ambiguous-preserved-work-research,"Research every untouched Batch E and unresolved ambiguity from data/fleet-stale-worktree-landed-rescan/report.md: dirty legacy project-tree/overlay copy, orphan validation-upgrade identity, backlog-on…"
+  issue-424-workflow-priority-scout,"GitHub #424 bounded scout. Define resolver contract, serialization, and implementation order with #590/#423/#777/#779. Do not implement or make product-policy choices not already settled."
+  gh-social-automate-404,"GitHub candidate admitted by Continuous Operations v2. Project: social-automate Repository: ChrisGutierrezNet/social-automate Issue: https://github.com/ChrisGutierrezNet/social-automate/issues/404 Ver…"
+  gh-social-automate-682,"GitHub candidate admitted by Continuous Operations v2. Project: social-automate Repository: ChrisGutierrezNet/social-automate Issue: https://github.com/ChrisGutierrezNet/social-automate/issues/682 Ver…"
+  gh-social-automate-683,"GitHub candidate admitted by Continuous Operations v2. Project: social-automate Repository: ChrisGutierrezNet/social-automate Issue: https://github.com/ChrisGutierrezNet/social-automate/issues/683 Ver…"
+  gh-social-automate-421,"GitHub candidate admitted by Continuous Operations v2. Project: social-automate Repository: ChrisGutierrezNet/social-automate Issue: https://github.com/ChrisGutierrezNet/social-automate/issues/421 Ver…"
+  gh-social-automate-550,"GitHub candidate admitted by Continuous Operations v2. Project: social-automate Repository: ChrisGutierrezNet/social-automate Issue: https://github.com/ChrisGutierrezNet/social-automate/issues/550 Ver…"
+  gh-no-mistakes-277,"GitHub candidate admitted by Continuous Operations v2. Project: no-mistakes Repository: kunchenguid/no-mistakes Issue: https://github.com/kunchenguid/no-mistakes/issues/277 Verdict: ready (bounded_rea…"
+  gh-no-mistakes-278,"GitHub candidate admitted by Continuous Operations v2. Project: no-mistakes Repository: kunchenguid/no-mistakes Issue: https://github.com/kunchenguid/no-mistakes/issues/278 Verdict: ready (bounded_rea…"
+  gh-no-mistakes-354,"GitHub candidate admitted by Continuous Operations v2. Project: no-mistakes Repository: kunchenguid/no-mistakes Issue: https://github.com/kunchenguid/no-mistakes/issues/354 Verdict: ready (bounded_rea…"
+  gh-no-mistakes-391,"GitHub candidate admitted by Continuous Operations v2. Project: no-mistakes Repository: kunchenguid/no-mistakes Issue: https://github.com/kunchenguid/no-mistakes/issues/391 Verdict: ready (bounded_rea…"
+  gh-no-mistakes-392,"GitHub candidate admitted by Continuous Operations v2. Project: no-mistakes Repository: kunchenguid/no-mistakes Issue: https://github.com/kunchenguid/no-mistakes/issues/392 Verdict: ready (bounded_rea…"
+  gh-no-mistakes-407,"GitHub candidate admitted by Continuous Operations v2. Project: no-mistakes Repository: kunchenguid/no-mistakes Issue: https://github.com/kunchenguid/no-mistakes/issues/407 Verdict: ready (bounded_rea…"
+  gh-no-mistakes-464,"GitHub candidate admitted by Continuous Operations v2. Project: no-mistakes Repository: kunchenguid/no-mistakes Issue: https://github.com/kunchenguid/no-mistakes/issues/464 Verdict: ready (bounded_rea…"
+  gh-no-mistakes-482,"GitHub candidate admitted by Continuous Operations v2. Project: no-mistakes Repository: kunchenguid/no-mistakes Issue: https://github.com/kunchenguid/no-mistakes/issues/482 Verdict: ready (bounded_rea…"
+  gh-no-mistakes-485,"GitHub candidate admitted by Continuous Operations v2. Project: no-mistakes Repository: kunchenguid/no-mistakes Issue: https://github.com/kunchenguid/no-mistakes/issues/485 Verdict: ready (bounded_rea…"
+  gh-no-mistakes-519,"GitHub candidate admitted by Continuous Operations v2. Project: no-mistakes Repository: kunchenguid/no-mistakes Issue: https://github.com/kunchenguid/no-mistakes/issues/519 Verdict: ready (bounded_rea…"
+  gh-no-mistakes-529,"GitHub candidate admitted by Continuous Operations v2. Project: no-mistakes Repository: kunchenguid/no-mistakes Issue: https://github.com/kunchenguid/no-mistakes/issues/529 Verdict: ready (bounded_rea…"
+  gh-no-mistakes-546,"GitHub candidate admitted by Continuous Operations v2. Project: no-mistakes Repository: kunchenguid/no-mistakes Issue: https://github.com/kunchenguid/no-mistakes/issues/546 Verdict: ready (bounded_rea…"
+  gh-no-mistakes-552,"GitHub candidate admitted by Continuous Operations v2. Project: no-mistakes Repository: kunchenguid/no-mistakes Issue: https://github.com/kunchenguid/no-mistakes/issues/552 Verdict: ready (bounded_rea…"
+  gh-no-mistakes-554,"GitHub candidate admitted by Continuous Operations v2. Project: no-mistakes Repository: kunchenguid/no-mistakes Issue: https://github.com/kunchenguid/no-mistakes/issues/554 Verdict: ready (bounded_rea…"
+  gh-no-mistakes-606,"GitHub candidate admitted by Continuous Operations v2. Project: no-mistakes Repository: kunchenguid/no-mistakes Issue: https://github.com/kunchenguid/no-mistakes/issues/606 Verdict: ready (bounded_rea…"
+  gh-no-mistakes-646,"GitHub candidate admitted by Continuous Operations v2. Project: no-mistakes Repository: kunchenguid/no-mistakes Issue: https://github.com/kunchenguid/no-mistakes/issues/646 Verdict: ready (bounded_rea…"
+  gh-no-mistakes-674,"GitHub candidate admitted by Continuous Operations v2. Project: no-mistakes Repository: kunchenguid/no-mistakes Issue: https://github.com/kunchenguid/no-mistakes/issues/674 Verdict: ready (bounded_rea…"
+  gh-no-mistakes-681,"GitHub candidate admitted by Continuous Operations v2. Project: no-mistakes Repository: kunchenguid/no-mistakes Issue: https://github.com/kunchenguid/no-mistakes/issues/681 Verdict: ready (bounded_rea…"
+  issue-936-migration-risk-guard-scout-decision-evidence-freshness-window,"Origin: issue-936-migration-risk-guard-scout Decision key: evidence-freshness-window State: awaiting captain decision."
+  issue-936-migration-risk-guard-scout-decision-private-artifact-registry-label,"Origin: issue-936-migration-risk-guard-scout Decision key: private-artifact-registry-label State: awaiting captain decision."
+  issue-936-migration-risk-guard-scout-decision-github-aggregate-counts,"Origin: issue-936-migration-risk-guard-scout Decision key: github-aggregate-counts State: awaiting captain decision."
+  issue-936-migration-risk-guard-scout-decision-low-risk-rationale-authority,"Origin: issue-936-migration-risk-guard-scout Decision key: low-risk-rationale-authority State: awaiting captain decision."
+  issue-936-migration-risk-guard-scout-decision-backup-registry-integration,"Origin: issue-936-migration-risk-guard-scout Decision key: backup-registry-integration State: awaiting captain decision."
+  issue-936-migration-risk-guard-scout-decision-private-artifact-labels,"Origin: issue-936-migration-risk-guard-scout Decision key: private-artifact-labels State: awaiting captain decision."
+  issue-936-migration-risk-guard-scout-decision-public-aggregate-counts,"Origin: issue-936-migration-risk-guard-scout Decision key: public-aggregate-counts State: awaiting captain decision."
+  issue-936-migration-risk-guard-scout-decision-backup-registry-contract,"Origin: issue-936-migration-risk-guard-scout Decision key: backup-registry-contract State: awaiting captain decision."
+  issue-424-workflow-priority-scout-decision-default-exclusivity-group,"Origin: issue-424-workflow-priority-scout Decision key: default-exclusivity-group State: awaiting captain decision."
+  issue-424-workflow-priority-scout-decision-priority-range,"Origin: issue-424-workflow-priority-scout Decision key: priority-range State: awaiting captain decision."
+  issue-424-workflow-priority-scout-decision-max-n-initial-scope,"Origin: issue-424-workflow-priority-scout Decision key: max-n-initial-scope State: awaiting captain decision."
+  issue-424-workflow-priority-scout-decision-publication-tie-break-direction,"Origin: issue-424-workflow-priority-scout Decision key: publication-tie-break-direction State: awaiting captain decision."
+  issue-424-workflow-priority-scout-decision-conflict-warning-behavior,"Origin: issue-424-workflow-priority-scout Decision key: conflict-warning-behavior State: awaiting captain decision."
+  issue-424-workflow-priority-scout-decision-revision-replay-identity,"Origin: issue-424-workflow-priority-scout Decision key: revision-replay-identity State: awaiting captain decision."
+  issue-424-workflow-priority-scout-decision-manual-idempotency-policy,"Origin: issue-424-workflow-priority-scout Decision key: manual-idempotency-policy State: awaiting captain decision."
+  issue-424-workflow-priority-scout-decision-page-global-conflict-policy,"Origin: issue-424-workflow-priority-scout Decision key: page-global-conflict-policy State: awaiting captain decision."
+  issue-424-workflow-priority-scout-decision-active-publish-boundary,"Origin: issue-424-workflow-priority-scout Decision key: active-publish-boundary State: awaiting captain decision."
+  issue-794-agent-draft-backfill-decision-aggregate-necessity-diagnostic,"Origin: issue-794-agent-draft-backfill Decision key: aggregate-necessity-diagnostic State: awaiting captain decision."
+  social-automate-current-priority-candidate-scout-decision-agent-outbound-dm-volume-ceiling-996,"Origin: social-automate-current-priority-candidate-scout Decision key: agent-outbound-dm-volume-ceiling-996 State: awaiting captain decision."
+  social-automate-hidden-feature-completion-scout-decision-live-rbac-rollout,"Origin: social-automate-hidden-feature-completion-scout Decision key: live-rbac-rollout State: awaiting captain decision."
+  social-automate-hidden-feature-completion-scout-decision-cron-time-contract,"Origin: social-automate-hidden-feature-completion-scout Decision key: cron-time-contract State: awaiting captain decision."
+  social-automate-hidden-feature-completion-scout-decision-workflow-admission-contract,"Origin: social-automate-hidden-feature-completion-scout Decision key: workflow-admission-contract State: awaiting captain decision."
+  social-automate-hidden-feature-completion-scout-decision-ai-economics-provider-policy,"Origin: social-automate-hidden-feature-completion-scout Decision key: ai-economics-provider-policy State: awaiting captain decision."
+  social-automate-hidden-feature-completion-scout-decision-durable-action-pilot,"Origin: social-automate-hidden-feature-completion-scout Decision key: durable-action-pilot State: awaiting captain decision."
+  social-automate-hidden-feature-completion-scout-decision-agent-dm-release,"Origin: social-automate-hidden-feature-completion-scout Decision key: agent-dm-release State: awaiting captain decision."
+  issue-419-timezone-scheduling-implementation,"Approved contract: data/issue-419-timezone-decision-independent-review/captain-decision.md. Implementation remains separately captain-gated; no issue edit, migration, production access, deployment, or…"
+  gh-social-automate-480,"GitHub candidate admitted by Continuous Operations v2. Project: social-automate Repository: Click-Enterprise/social-automate Issue: https://github.com/Click-Enterprise/social-automate/issues/480 Verdi…"
+  issue-647-api-webhook-docs-scout-decision-api-key-effective-authority-public-wording,"Origin: issue-647-api-webhook-docs-scout Decision key: api-key-effective-authority-public-wording State: awaiting captain decision."
+  issue-647-api-webhook-docs-scout-decision-outbound-webhook-doc-ownership,"Origin: issue-647-api-webhook-docs-scout Decision key: outbound-webhook-doc-ownership State: awaiting captain decision."
+  issue-647-api-webhook-docs-scout-decision-legacy-key-audit-audience,"Origin: issue-647-api-webhook-docs-scout Decision key: legacy-key-audit-audience State: awaiting captain decision."
+  issue-647-api-webhook-docs-scout-decision-public-rate-limit-contract,"Origin: issue-647-api-webhook-docs-scout Decision key: public-rate-limit-contract State: awaiting captain decision."
+  issue-647-api-webhook-docs-scout-decision-production-rollout-claim,"Origin: issue-647-api-webhook-docs-scout Decision key: production-rollout-claim State: awaiting captain decision."
+  issue-651-followup-docs-scout-decision-dm-eligibility-contract,"Origin: issue-651-followup-docs-scout Decision key: dm-eligibility-contract State: awaiting captain decision."
+  issue-651-followup-docs-scout-decision-pause-semantics,"Origin: issue-651-followup-docs-scout Decision key: pause-semantics State: awaiting captain decision."
+  issue-651-followup-docs-scout-decision-review-surface-batch,"Origin: issue-651-followup-docs-scout Decision key: review-surface-batch State: awaiting captain decision."
+  issue-651-followup-docs-scout-decision-inert-controls,"Origin: issue-651-followup-docs-scout Decision key: inert-controls State: awaiting captain decision."
+  issue-651-followup-docs-scout-decision-unreplied-surface,"Origin: issue-651-followup-docs-scout Decision key: unreplied-surface State: awaiting captain decision."
+  issue-651-followup-docs-scout-decision-failure-observability,"Origin: issue-651-followup-docs-scout Decision key: failure-observability State: awaiting captain decision."
+  issue-518-brand-voice-resolution-scout-decision-page-precedence-semantics,"Origin: issue-518-brand-voice-resolution-scout Decision key: page-precedence-semantics State: awaiting captain decision."
+  issue-518-brand-voice-resolution-scout-decision-fallback-default-selection,"Origin: issue-518-brand-voice-resolution-scout Decision key: fallback-default-selection State: awaiting captain decision."
+  issue-518-brand-voice-resolution-scout-decision-mutation-page-authority,"Origin: issue-518-brand-voice-resolution-scout Decision key: mutation-page-authority State: awaiting captain decision."
+  issue-518-brand-voice-resolution-scout-decision-brand-voice-read-visibility,"Origin: issue-518-brand-voice-resolution-scout Decision key: brand-voice-read-visibility State: awaiting captain decision."
+  issue-518-brand-voice-resolution-scout-decision-tree-voice-assignment-authority,"Origin: issue-518-brand-voice-resolution-scout Decision key: tree-voice-assignment-authority State: awaiting captain decision."
+  issue-518-brand-voice-resolution-scout-decision-delete-dependency-policy,"Origin: issue-518-brand-voice-resolution-scout Decision key: delete-dependency-policy State: awaiting captain decision."
+  issue-518-brand-voice-resolution-scout-decision-audit-durability,"Origin: issue-518-brand-voice-resolution-scout Decision key: audit-durability State: awaiting captain decision."
+  issue-518-brand-voice-resolution-scout-decision-training-review-contract,"Origin: issue-518-brand-voice-resolution-scout Decision key: training-review-contract State: awaiting captain decision."
+  issue-518-brand-voice-resolution-scout-decision-legacy-invalid-link-remediation,"Origin: issue-518-brand-voice-resolution-scout Decision key: legacy-invalid-link-remediation State: awaiting captain decision."
+  issue-518-brand-voice-resolution-scout-decision-resolver-failure-observability,"Origin: issue-518-brand-voice-resolution-scout Decision key: resolver-failure-observability State: awaiting captain decision."
+  issue-518-brand-voice-resolution-scout-decision-dry-run-page-context,"Origin: issue-518-brand-voice-resolution-scout Decision key: dry-run-page-context State: awaiting captain decision."
+  issue-518-brand-voice-resolution-scout-decision-brand-foundation-resumption,"Origin: issue-518-brand-voice-resolution-scout Decision key: brand-foundation-resumption State: awaiting captain decision."
+  issue-624-platform-policy-resolver-scout-decision-org-scope,"Origin: issue-624-platform-policy-resolver-scout Decision key: org-scope State: awaiting captain decision."
+  issue-624-platform-policy-resolver-scout-decision-brand-scope,"Origin: issue-624-platform-policy-resolver-scout Decision key: brand-scope State: awaiting captain decision."
+  issue-624-platform-policy-resolver-scout-decision-protected-taxonomy,"Origin: issue-624-platform-policy-resolver-scout Decision key: protected-taxonomy State: awaiting captain decision."
+  issue-624-platform-policy-resolver-scout-decision-jurisdiction,"Origin: issue-624-platform-policy-resolver-scout Decision key: jurisdiction State: awaiting captain decision."
+  issue-624-platform-policy-resolver-scout-decision-manual-coverage,"Origin: issue-624-platform-policy-resolver-scout Decision key: manual-coverage State: awaiting captain decision."
+  issue-624-platform-policy-resolver-scout-decision-approval-handoff,"Origin: issue-624-platform-policy-resolver-scout Decision key: approval-handoff State: awaiting captain decision."
+  issue-624-platform-policy-resolver-scout-decision-reason-copy,"Origin: issue-624-platform-policy-resolver-scout Decision key: reason-copy State: awaiting captain decision."
+  issue-624-platform-policy-resolver-scout-decision-publication-authority,"Origin: issue-624-platform-policy-resolver-scout Decision key: publication-authority State: awaiting captain decision."
+  issue-624-platform-policy-resolver-scout-decision-break-glass,"Origin: issue-624-platform-policy-resolver-scout Decision key: break-glass State: awaiting captain decision."
+  issue-624-platform-policy-resolver-scout-decision-emergency-semantics,"Origin: issue-624-platform-policy-resolver-scout Decision key: emergency-semantics State: awaiting captain decision."
+  issue-624-platform-policy-resolver-scout-decision-activation-authority,"Origin: issue-624-platform-policy-resolver-scout Decision key: activation-authority State: awaiting captain decision."
+  issue-624-platform-policy-resolver-scout-decision-unavailable-state,"Origin: issue-624-platform-policy-resolver-scout Decision key: unavailable-state State: awaiting captain decision."
+  issue-624-platform-policy-resolver-scout-decision-evidence-retention,"Origin: issue-624-platform-policy-resolver-scout Decision key: evidence-retention State: awaiting captain decision."
+  issue-624-platform-policy-resolver-scout-decision-replay-semantics,"Origin: issue-624-platform-policy-resolver-scout Decision key: replay-semantics State: awaiting captain decision."
+  issue-624-platform-policy-resolver-scout-decision-action-vocabulary,"Origin: issue-624-platform-policy-resolver-scout Decision key: action-vocabulary State: awaiting captain decision."
+  issue-654-workflow-prompt-docs-scout-decision-workflow-scheduling-public-contract,"Origin: issue-654-workflow-prompt-docs-scout Decision key: workflow-scheduling-public-contract State: awaiting captain decision."
+  issue-654-workflow-prompt-docs-scout-decision-workflow-cron-timezone-rollout,"Origin: issue-654-workflow-prompt-docs-scout Decision key: workflow-cron-timezone-rollout State: awaiting captain decision."
+  issue-654-workflow-prompt-docs-scout-decision-workflow-live-test-safety-contract,"Origin: issue-654-workflow-prompt-docs-scout Decision key: workflow-live-test-safety-contract State: awaiting captain decision."
+  issue-654-workflow-prompt-docs-scout-decision-workflow-condition-expression-surface,"Origin: issue-654-workflow-prompt-docs-scout Decision key: workflow-condition-expression-surface State: awaiting captain decision."
+  issue-654-workflow-prompt-docs-scout-decision-prompt-variable-public-contract,"Origin: issue-654-workflow-prompt-docs-scout Decision key: prompt-variable-public-contract State: awaiting captain decision."
+  issue-654-workflow-prompt-docs-scout-decision-lead-classifier-example-contract,"Origin: issue-654-workflow-prompt-docs-scout Decision key: lead-classifier-example-contract State: awaiting captain decision."
+  issue-654-workflow-prompt-docs-scout-decision-automation-rule-test-contract,"Origin: issue-654-workflow-prompt-docs-scout Decision key: automation-rule-test-contract State: awaiting captain decision."
+  issue-654-workflow-prompt-docs-scout-decision-automation-rule-action-truth,"Origin: issue-654-workflow-prompt-docs-scout Decision key: automation-rule-action-truth State: awaiting captain decision."
+  issue-657-getting-started-docs-scout-decision-meta-release-coupling,"Origin: issue-657-getting-started-docs-scout Decision key: meta-release-coupling State: awaiting captain decision."
+  issue-657-getting-started-docs-scout-decision-mobile-tour-replay-contract,"Origin: issue-657-getting-started-docs-scout Decision key: mobile-tour-replay-contract State: awaiting captain decision."
+  issue-657-getting-started-docs-scout-decision-public-screenshot-policy,"Origin: issue-657-getting-started-docs-scout Decision key: public-screenshot-policy State: awaiting captain decision."
+  issue-896-backup-posture-scout-decision-retention-objectives,"Origin: issue-896-backup-posture-scout Decision key: retention-objectives State: awaiting captain decision."
+  issue-896-backup-posture-scout-decision-prune-and-capacity-policy,"Origin: issue-896-backup-posture-scout Decision key: prune-and-capacity-policy State: awaiting captain decision."
+  issue-896-backup-posture-scout-decision-offsite-retention-and-trust,"Origin: issue-896-backup-posture-scout Decision key: offsite-retention-and-trust State: awaiting captain decision."
+  issue-896-backup-posture-scout-decision-scheduler-and-lock-policy,"Origin: issue-896-backup-posture-scout Decision key: scheduler-and-lock-policy State: awaiting captain decision."
+  issue-896-backup-posture-scout-decision-alert-delivery-policy,"Origin: issue-896-backup-posture-scout Decision key: alert-delivery-policy State: awaiting captain decision."
+  issue-896-backup-posture-scout-decision-restore-proof-authority-and-privacy,"Origin: issue-896-backup-posture-scout Decision key: restore-proof-authority-and-privacy State: awaiting captain decision."
+  issue-896-backup-posture-scout-decision-installation-and-activation,"Origin: issue-896-backup-posture-scout Decision key: installation-and-activation State: awaiting captain decision."
+  issue-896-backup-posture-scout-decision-legacy-restore-disposition,"Origin: issue-896-backup-posture-scout Decision key: legacy-restore-disposition State: awaiting captain decision."
+  issue-896-backup-posture-scout-decision-schema-rollback-compatibility,"Origin: issue-896-backup-posture-scout Decision key: schema-rollback-compatibility State: awaiting captain decision."
+  issue-423-long-term-architecture-scout-decision-ceiling-editor-authority,"Origin: issue-423-long-term-architecture-scout Decision key: ceiling-editor-authority State: awaiting captain decision."
+  issue-423-long-term-architecture-scout-decision-ceiling-window-contract,"Origin: issue-423-long-term-architecture-scout Decision key: ceiling-window-contract State: awaiting captain decision."
+  gh-social-automate-654,"GitHub candidate admitted by Continuous Operations v2. Project: social-automate Repository: Click-Enterprise/social-automate Issue: https://github.com/Click-Enterprise/social-automate/issues/654 Verdi…"
+  gh-no-mistakes-690,"GitHub candidate admitted by Continuous Operations v2. Project: no-mistakes Repository: kunchenguid/no-mistakes Issue: https://github.com/kunchenguid/no-mistakes/issues/690 Verdict: ready (bounded_rea…"
+  gh-social-automate-657,"GitHub candidate admitted by Continuous Operations v2. Project: social-automate Repository: Click-Enterprise/social-automate Issue: https://github.com/Click-Enterprise/social-automate/issues/657 Verdi…"
+  social-release-de206ab20,"Current main de206ab2039c2b9c0e54f9702af44c176dfb17d7 has canonical exact-main CI run 31327931997 attempt 1 green. No build-only candidate, standalone host preflight, deployment authorization, or prod…"
+  issue-767-usability-guard-coverage,"Captain chose Option B on 2026-07-28: keep https://github.com/Click-Enterprise/social-automate/issues/767 open and preserve branch fm/issue-767-usability-guard-coverage at f10a0571386cd36c6309c0360d22…"
+  social-mcp-phase3-plan-decision-public-capability-scope,"Origin: social-mcp-phase3-plan Decision key: public-capability-scope State: awaiting captain decision."
+  social-mcp-phase3-plan-decision-api-key-ai-review-authority,"Origin: social-mcp-phase3-plan Decision key: api-key-ai-review-authority State: awaiting captain decision."
+  social-mcp-phase3-plan-decision-api-key-grant-authority,"Origin: social-mcp-phase3-plan Decision key: api-key-grant-authority State: awaiting captain decision."
+  social-mcp-phase3-plan-decision-public-auth-posture,"Origin: social-mcp-phase3-plan Decision key: public-auth-posture State: awaiting captain decision."
+  social-mcp-phase3-plan-decision-destructive-confirmation-policy,"Origin: social-mcp-phase3-plan Decision key: destructive-confirmation-policy State: awaiting captain decision."
+  social-mcp-phase3-plan-decision-legacy-cutover-retirement,"Origin: social-mcp-phase3-plan Decision key: legacy-cutover-retirement State: awaiting captain decision."
+  social-mcp-first-cohort-readiness,"Captain-approved readiness work after P3-4: synthetic no-provider proof, per-tool/error/accounting observability, drift checks, support runbook, rollback drill, and exact-release readiness. Do not dep…"
+  social-mcp-first-cohort-release-preparation-decision-readiness-build-preflight,"Origin: social-mcp-first-cohort-release-preparation Decision key: readiness-build-preflight State: awaiting captain decision."
+  social-mcp-first-cohort-release-preparation-decision-cohort-limits,"Origin: social-mcp-first-cohort-release-preparation Decision key: cohort-limits State: awaiting captain decision."
+  social-mcp-first-cohort-release-preparation-decision-exact-deployment,"Origin: social-mcp-first-cohort-release-preparation Decision key: exact-deployment State: awaiting captain decision."
+  social-mcp-first-cohort-release-preparation-decision-named-account,"Origin: social-mcp-first-cohort-release-preparation Decision key: named-account State: awaiting captain decision."
+  social-mcp-first-cohort-release-preparation-decision-named-account-activation,"Origin: social-mcp-first-cohort-release-preparation Decision key: named-account-activation State: awaiting captain decision."
+  social-mcp-u5-safe-authoring,"- [ ] social-mcp-u5-safe-authoring - Add MCP no-send safe authoring blocked-by: social-mcp-u4-safe-reads-state (repo: social-automate) (kind: ship) (priority: 1) (since 2026-08-10)"
+  social-mcp-u6-operator-context,"- [ ] social-mcp-u6-operator-context - Add MCP safe operator context and configuration blocked-by: social-mcp-u5-safe-authoring (repo: social-automate) (kind: ship) (priority: 1) (since 2026-08-10)"
+  social-mcp-u7-exclusions-readiness,"- [ ] social-mcp-u7-exclusions-readiness - Enforce MCP exclusions and complete dark readiness docs blocked-by: social-mcp-u6-operator-context (repo: social-automate) (kind: ship) (priority: 1) (since …"
+  issue-984-local-visual-baseline,"Implement GitHub issue https://github.com/Click-Enterprise/social-automate/issues/984 completely: add local-only desktop/mobile/tablet Playwright projects and the first unauthenticated light/dark visu…"
+  social-mcp-phase3-discovery-resources,"Captain-approved P3-4. Add authorized capability discovery and bounded read-only resources with no cross-tenant or object-existence leakage, exact accounting, and no secret/provider fields. Preserve t…"
+  issue-764-residual-mobile-card-twins,"Complete only the five residual mobile card-twin surfaces defined by GitHub issue https://github.com/Click-Enterprise/social-automate/issues/764 after PR #1087: backups, templates, inbound webhooks, u…"
+  issue-864-default-personal-inbox-views-publication,"Captain approved issue #864 as the next high-priority Social Automate delivery. Use active exact ContactAccessGrant rows, not ContactWatcher, for Shared with me. Preserve local candidate f2f169f7982bc…"
+  social-mcp-p34-implementation-preparation,"Prepare MCP Phase 3.4 capability discovery and read-only resources against the accepted modern-v2 contract while P3-3 completes. Map exact implementation boundaries, tests, schemas, tool/resource disc…"
+  social-mcp-first-cohort-release-preparation,"Prepare the MCP v2 first-cohort readiness, exact-deployment evidence, and named-account consent/activation packet. Prove what can be proved read-only now, define permission/no-provider-effect/observab…"
+  social-recent-data-ready-work-delta-audit,"Refresh the 2026-08-09 recent private-notes gap audit against every Social Automate data artifact generated afterward plus current GitHub issues, Project/Roadmap state, PRs, dependencies, branches, la…"
+  social-mcp-phase3-modern-catalog,"Captain-approved P3-3. Add bounded schemas, structured output, safe opaque cursors, truthful annotations, and per-key/account/tool-cost controls. Exclude unsafe/destructive operations and all first-co…"
+  issue-704-saved-view-fallback-hardening,"GitHub #704. Captain directed completion rather than another park. Preserve checkpoint a4728014, verified regex commit 4fbae062b, and synchronized current-main merge 399a0037f. Codex GNHF is completin…"
+  validation-major-fault-readonly-attribution,Bounded postmortem attribution from retained retry evidence and read-only kernel/source/log surfaces. No new validation run or load.
+paths[41]{id,worktree,home,status,report}:
+  bearings-live-state-diagnosis,/home/exedev/.treehouse/kun-agent-workspace-8bf1b0/13/kun-agent-workspace,"-",/home/exedev/kun-agent-workspace/state/bearings-live-state-diagnosis.status,/home/exedev/kun-agent-workspace/data/bearings-live-state-diagnosis/report.md
+  bearings-secondmate-snapshot-timeout-fix,/home/exedev/.treehouse/kun-agent-workspace-8bf1b0/6/kun-agent-workspace,"-",/home/exedev/kun-agent-workspace/state/bearings-secondmate-snapshot-timeout-fix.status,/home/exedev/kun-agent-workspace/data/bearings-secondmate-snapshot-timeout-fix/report.md
+  capability-registry-b2,/home/exedev/.treehouse/social-automate-f06c1e/8/social-automate,"-",/home/exedev/kun-agent-workspace/state/capability-registry-b2.status,/home/exedev/kun-agent-workspace/data/capability-registry-b2/report.md
+  codex-release-review-audit,/home/exedev/.treehouse/social-automate-f06c1e/1/social-automate,"-",/home/exedev/kun-agent-workspace/state/codex-release-review-audit.status,/home/exedev/kun-agent-workspace/data/codex-release-review-audit/report.md
+  firstmate-completed-candidate-integration,/home/exedev/.treehouse/kun-agent-workspace-8bf1b0/16/kun-agent-workspace,"-",/home/exedev/kun-agent-workspace/state/firstmate-completed-candidate-integration.status,/home/exedev/kun-agent-workspace/data/firstmate-completed-candidate-integration/report.md
+  firstmate-continuous-ops-capacity-repair,/home/exedev/.treehouse/kun-agent-workspace-8bf1b0/9/kun-agent-workspace,"-",/home/exedev/kun-agent-workspace/state/firstmate-continuous-ops-capacity-repair.status,/home/exedev/kun-agent-workspace/data/firstmate-continuous-ops-capacity-repair/report.md
+  firstmate-continuous-ops-v2,/home/exedev/.treehouse/kun-agent-workspace-8bf1b0/2/kun-agent-workspace,"-",/home/exedev/kun-agent-workspace/state/firstmate-continuous-ops-v2.status,/home/exedev/kun-agent-workspace/data/firstmate-continuous-ops-v2/report.md
+  firstmate-legacy-project-tree-retirement,/home/exedev/.treehouse/kun-agent-workspace-8bf1b0/1/kun-agent-workspace,"-",/home/exedev/kun-agent-workspace/state/firstmate-legacy-project-tree-retirement.status,/home/exedev/kun-agent-workspace/data/firstmate-legacy-project-tree-retirement/report.md
+  firstmate-main-divergence-reconciliation,/home/exedev/.treehouse/kun-agent-workspace-8bf1b0/10/kun-agent-workspace,"-",/home/exedev/kun-agent-workspace/state/firstmate-main-divergence-reconciliation.status,/home/exedev/kun-agent-workspace/data/firstmate-main-divergence-reconciliation/report.md
+  firstmate-main-retained-candidate-integration,/home/exedev/.treehouse/kun-agent-workspace-8bf1b0/11/kun-agent-workspace,"-",/home/exedev/kun-agent-workspace/state/firstmate-main-retained-candidate-integration.status,/home/exedev/kun-agent-workspace/data/firstmate-main-retained-candidate-integration/report.md
+  firstmate-owned-extension-framework-scout,/home/exedev/.treehouse/kun-agent-workspace-8bf1b0/4/kun-agent-workspace,"-",/home/exedev/kun-agent-workspace/state/firstmate-owned-extension-framework-scout.status,/home/exedev/kun-agent-workspace/data/firstmate-owned-extension-framework-scout/report.md
+  firstmate-plain-language-github-writing,/home/exedev/.treehouse/kun-agent-workspace-8bf1b0/2/kun-agent-workspace,"-",/home/exedev/kun-agent-workspace/state/firstmate-plain-language-github-writing.status,/home/exedev/kun-agent-workspace/data/firstmate-plain-language-github-writing/report.md
+  firstmate-recurring-captain-reminders,/home/exedev/.treehouse/kun-agent-workspace-8bf1b0/3/kun-agent-workspace,"-",/home/exedev/kun-agent-workspace/state/firstmate-recurring-captain-reminders.status,/home/exedev/kun-agent-workspace/data/firstmate-recurring-captain-reminders/report.md
+  firstmate-recurring-reminders-recovery,/home/exedev/.treehouse/kun-agent-workspace-8bf1b0/7/kun-agent-workspace,"-",/home/exedev/kun-agent-workspace/state/firstmate-recurring-reminders-recovery.status,/home/exedev/kun-agent-workspace/data/firstmate-recurring-reminders-recovery/report.md
+  firstmate-release-batching-protocol,/home/exedev/.treehouse/kun-agent-workspace-8bf1b0/7/kun-agent-workspace,"-",/home/exedev/kun-agent-workspace/state/firstmate-release-batching-protocol.status,/home/exedev/kun-agent-workspace/data/firstmate-release-batching-protocol/report.md
+  firstmate-slack-milestone-delivery,/home/exedev/.treehouse/kun-agent-workspace-8bf1b0/8/kun-agent-workspace,"-",/home/exedev/kun-agent-workspace/state/firstmate-slack-milestone-delivery.status,/home/exedev/kun-agent-workspace/data/firstmate-slack-milestone-delivery/report.md
+  firstmate-slack-socket-mode-inbound,/home/exedev/.treehouse/kun-agent-workspace-8bf1b0/12/kun-agent-workspace,"-",/home/exedev/kun-agent-workspace/state/firstmate-slack-socket-mode-inbound.status,/home/exedev/kun-agent-workspace/data/firstmate-slack-socket-mode-inbound/report.md
+  firstmate-terminal-blocked-stale-suppression,/home/exedev/.treehouse/kun-agent-workspace-8bf1b0/8/kun-agent-workspace,"-",/home/exedev/kun-agent-workspace/state/firstmate-terminal-blocked-stale-suppression.status,/home/exedev/kun-agent-workspace/data/firstmate-terminal-blocked-stale-suppression/report.md
+  firstmate-terminal-stale-suppression-recovery,/home/exedev/.treehouse/kun-agent-workspace-8bf1b0/6/kun-agent-workspace,"-",/home/exedev/kun-agent-workspace/state/firstmate-terminal-stale-suppression-recovery.status,/home/exedev/kun-agent-workspace/data/firstmate-terminal-stale-suppression-recovery/report.md
+  fleet-legacy-endpoint-cleanup-diagnosis,/home/exedev/.treehouse/kun-agent-workspace-8bf1b0/3/kun-agent-workspace,"-",/home/exedev/kun-agent-workspace/state/fleet-legacy-endpoint-cleanup-diagnosis.status,/home/exedev/kun-agent-workspace/data/fleet-legacy-endpoint-cleanup-diagnosis/report.md
+  fleet-stale-binding-cleanup-wave,/home/exedev/.treehouse/kun-agent-workspace-8bf1b0/4/kun-agent-workspace,"-",/home/exedev/kun-agent-workspace/state/fleet-stale-binding-cleanup-wave.status,/home/exedev/kun-agent-workspace/data/fleet-stale-binding-cleanup-wave/report.md
+  issue-605-exemption-expiry,/home/exedev/.treehouse/social-automate-f06c1e/15/social-automate,"-",/home/exedev/kun-agent-workspace/state/issue-605-exemption-expiry.status,/home/exedev/kun-agent-workspace/data/issue-605-exemption-expiry/report.md
+  issue-725-standalone-deploy-ordering,/home/exedev/.treehouse/social-automate-f06c1e/1/social-automate,"-",/home/exedev/kun-agent-workspace/state/issue-725-standalone-deploy-ordering.status,/home/exedev/kun-agent-workspace/data/issue-725-standalone-deploy-ordering/report.md
+  issue-756-touch-category-actions,/home/exedev/.treehouse/social-automate-f06c1e/8/social-automate,"-",/home/exedev/kun-agent-workspace/state/issue-756-touch-category-actions.status,/home/exedev/kun-agent-workspace/data/issue-756-touch-category-actions/report.md
+  issue-759-residual-touch-targets,/home/exedev/.treehouse/social-automate-3aae1f/5/social-automate,"-",/home/exedev/kun-agent-workspace/state/issue-759-residual-touch-targets.status,/home/exedev/kun-agent-workspace/data/issue-759-residual-touch-targets/report.md
+  issue-789-inbox-empty-state,/home/exedev/.treehouse/social-automate-f06c1e/1/social-automate,"-",/home/exedev/kun-agent-workspace/state/issue-789-inbox-empty-state.status,/home/exedev/kun-agent-workspace/data/issue-789-inbox-empty-state/report.md
+  issue-794-agent-draft-backfill,/home/exedev/.treehouse/social-automate-3aae1f/2/social-automate,"-",/home/exedev/kun-agent-workspace/state/issue-794-agent-draft-backfill.status,/home/exedev/kun-agent-workspace/data/issue-794-agent-draft-backfill/report.md
+  issue-817-inbox-contact-row-semantics,/home/exedev/.treehouse/social-automate-3aae1f/6/social-automate,"-",/home/exedev/kun-agent-workspace/state/issue-817-inbox-contact-row-semantics.status,/home/exedev/kun-agent-workspace/data/issue-817-inbox-contact-row-semantics/report.md
+  issue-864-default-personal-inbox-views-recovery,/home/exedev/.treehouse/social-automate-3aae1f/10/social-automate,"-",/home/exedev/kun-agent-workspace/state/issue-864-default-personal-inbox-views-recovery.status,/home/exedev/kun-agent-workspace/data/issue-864-default-personal-inbox-views-recovery/report.md
+  issue-893-dm-autonomy-observability,/home/exedev/.treehouse/social-automate-f06c1e/15/social-automate,"-",/home/exedev/kun-agent-workspace/state/issue-893-dm-autonomy-observability.status,/home/exedev/kun-agent-workspace/data/issue-893-dm-autonomy-observability/report.md
+  no-mistakes-ci-authoritative-isolated-pilot,/home/exedev/.treehouse/no-mistakes-2ccc85/1/no-mistakes,"-",/home/exedev/kun-agent-workspace/state/no-mistakes-ci-authoritative-isolated-pilot.status,/home/exedev/kun-agent-workspace/data/no-mistakes-ci-authoritative-isolated-pilot/report.md
+  overnight-fleet-report,/home/exedev/.treehouse/kun-agent-workspace-8bf1b0/10/kun-agent-workspace,"-",/home/exedev/kun-agent-workspace/state/overnight-fleet-report.status,/home/exedev/kun-agent-workspace/data/overnight-fleet-report/report.md
+  portfolio-safe-record-reconciliation,/home/exedev/.treehouse/kun-agent-workspace-8bf1b0/14/kun-agent-workspace,"-",/home/exedev/kun-agent-workspace/state/portfolio-safe-record-reconciliation.status,/home/exedev/kun-agent-workspace/data/portfolio-safe-record-reconciliation/report.md
+  pr905-current-main-recert,/home/exedev/.treehouse/social-automate-f06c1e/7/social-automate,"-",/home/exedev/kun-agent-workspace/state/pr905-current-main-recert.status,/home/exedev/kun-agent-workspace/data/pr905-current-main-recert/report.md
+  private-overlay-upgrade-rehearsal,/home/exedev/.treehouse/kun-agent-workspace-8bf1b0/1/kun-agent-workspace,"-",/home/exedev/kun-agent-workspace/state/private-overlay-upgrade-rehearsal.status,/home/exedev/kun-agent-workspace/data/private-overlay-upgrade-rehearsal/report.md
+  social-automate-prep,/home/exedev/.treehouse/kun-agent-workspace-8bf1b0/5/kun-agent-workspace,/home/exedev/.treehouse/kun-agent-workspace-8bf1b0/5/kun-agent-workspace,/home/exedev/kun-agent-workspace/state/social-automate-prep.status,/home/exedev/kun-agent-workspace/data/social-automate-prep/report.md
+  social-depot-runner-benchmark,/home/exedev/.treehouse/social-automate-ci-benchmark-3e4dad/1/social-automate-ci-benchmark,"-",/home/exedev/kun-agent-workspace/state/social-depot-runner-benchmark.status,/home/exedev/kun-agent-workspace/data/social-depot-runner-benchmark/report.md
+  social-mcp-u4-safe-reads-state,/home/exedev/.treehouse/social-automate-3aae1f/1/social-automate,"-",/home/exedev/kun-agent-workspace/state/social-mcp-u4-safe-reads-state.status,/home/exedev/kun-agent-workspace/data/social-mcp-u4-safe-reads-state/report.md
+  social-pr-purpose-writing-contract,/home/exedev/.treehouse/social-automate-f06c1e/1/social-automate,"-",/home/exedev/kun-agent-workspace/state/social-pr-purpose-writing-contract.status,/home/exedev/kun-agent-workspace/data/social-pr-purpose-writing-contract/report.md
+  validation-concurrency-deep-research,/home/exedev/.treehouse/no-mistakes-2ccc85/1/no-mistakes,"-",/home/exedev/kun-agent-workspace/state/validation-concurrency-deep-research.status,/home/exedev/kun-agent-workspace/data/validation-concurrency-deep-research/report.md
+  validation-concurrency-deep-research-upgrade,"-","-",/home/exedev/kun-agent-workspace/state/validation-concurrency-deep-research-upgrade.status,/home/exedev/kun-agent-workspace/data/validation-concurrency-deep-research-upgrade/report.md
+endpoints[41]{id,backend,target,exists,agent}:
+  bearings-live-state-diagnosis,herdr,"default:wG:p6E",true,not_checked
+  bearings-secondmate-snapshot-timeout-fix,herdr,"default:wG:p1Z",false,not_checked
+  capability-registry-b2,herdr,"default:wF:p40",true,not_checked
+  codex-release-review-audit,herdr,"default:wF:p1M",false,not_checked
+  firstmate-completed-candidate-integration,herdr,"default:wG:p6K",true,not_checked
+  firstmate-continuous-ops-capacity-repair,herdr,"default:wG:p3T",true,not_checked
+  firstmate-continuous-ops-v2,herdr,"default:wG:p39",true,not_checked
+  firstmate-legacy-project-tree-retirement,herdr,"default:wG:p1W",false,not_checked
+  firstmate-main-divergence-reconciliation,herdr,"default:wG:p42",false,not_checked
+  firstmate-main-retained-candidate-integration,herdr,"default:wG:p43",true,not_checked
+  firstmate-owned-extension-framework-scout,herdr,"default:wF:p5T",true,not_checked
+  firstmate-plain-language-github-writing,herdr,"default:wF:p3K",true,not_checked
+  firstmate-recurring-captain-reminders,herdr,"default:wF:p5B",true,not_checked
+  firstmate-recurring-reminders-recovery,herdr,"default:wG:p5D",true,not_checked
+  firstmate-release-batching-protocol,herdr,"default:wG:p8",true,not_checked
+  firstmate-slack-milestone-delivery,herdr,"default:wG:p3S",true,not_checked
+  firstmate-slack-socket-mode-inbound,herdr,"default:wG:p5B",true,not_checked
+  firstmate-terminal-blocked-stale-suppression,herdr,"default:wG:pA",true,not_checked
+  firstmate-terminal-stale-suppression-recovery,herdr,"default:wG:p3K",true,not_checked
+  fleet-legacy-endpoint-cleanup-diagnosis,herdr,"default:wG:p3H",true,not_checked
+  fleet-stale-binding-cleanup-wave,herdr,"default:wG:p3P",true,not_checked
+  issue-605-exemption-expiry,herdr,"default:wF:pW",false,not_checked
+  issue-725-standalone-deploy-ordering,herdr,"default:wF:p1R",false,not_checked
+  issue-756-touch-category-actions,herdr,"default:wF:pE",false,not_checked
+  issue-759-residual-touch-targets,herdr,"default:wG:p6W",true,not_checked
+  issue-789-inbox-empty-state,herdr,"default:wF:p3E",false,not_checked
+  issue-794-agent-draft-backfill,herdr,"default:wG:p3X",true,not_checked
+  issue-817-inbox-contact-row-semantics,herdr,"default:wG:p6X",true,not_checked
+  issue-864-default-personal-inbox-views-recovery,herdr,"default:wG:p4Q",true,not_checked
+  issue-893-dm-autonomy-observability,herdr,"default:wF:p56",true,not_checked
+  no-mistakes-ci-authoritative-isolated-pilot,herdr,"default:wF:p5G",true,not_checked
+  overnight-fleet-report,herdr,"default:wG:p60",true,not_checked
+  portfolio-safe-record-reconciliation,herdr,"default:wG:p5X",false,not_checked
+  pr905-current-main-recert,herdr,"default:wF:p4Y",false,not_checked
+  private-overlay-upgrade-rehearsal,herdr,"default:wG:p2E",false,not_checked
+  social-automate-prep,herdr,"default:wH:p35",true,alive
+  social-depot-runner-benchmark,herdr,"default:wG:p3F",true,not_checked
+  social-mcp-u4-safe-reads-state,herdr,"default:wG:p6Z",true,not_checked
+  social-pr-purpose-writing-contract,herdr,"default:wG:p3N",false,not_checked
+  validation-concurrency-deep-research,herdr,"default:wG:p2D",false,not_checked
+  validation-concurrency-deep-research-upgrade,tmux,"-",null,not_checked
+omitted[3]{surface,reveal}:
+  watch/steer actions,"--fields actions"
+  secondmate parent activity evidence truncated for 1 record(s),"raise FM_SNAPSHOT_PARENT_ACTIVITY_LINES, FM_SNAPSHOT_PARENT_ACTIVITY_BYTES, or FM_SNAPSHOT_PARENT_ACTIVITIES"
+  live PR discovery + checks,"--include-prs"
