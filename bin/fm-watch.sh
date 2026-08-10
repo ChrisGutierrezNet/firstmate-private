@@ -481,6 +481,22 @@ surface_nonterminal_stale() {  # <window> <hash> [reason]
   wake "$reason"
 }
 
+terminal_wait_open_decision_reason() {  # <window> <task>
+  local win=$1 task=$2 open summary
+  open=$(status_open_decisions "$STATE/$task.status")
+  [ -n "$open" ] || return 1
+  summary=$(printf '%s\n' "$open" | awk -F '\t' '
+    NF >= 3 {
+      note=$3
+      for (i=4; i<=NF; i++) note=note " " $i
+      if (out != "") out=out " | "
+      out=out note
+    }
+    END { if (out != "") print out; else exit 1 }
+  ') || return 1
+  printf 'stale: %s (captain decision required for %s: %s)' "$win" "$task" "$summary"
+}
+
 # Check and heartbeat cadence must survive actionable exits and restarts: the
 # watcher may be relaunched before in-memory counters reach their threshold on a
 # busy fleet. Persist the schedule as file mtimes instead.
@@ -1065,11 +1081,13 @@ EOF
               date +%s > "$ssf"
               triage_log "absorbed stale (provably working, overriding a stale captain-relevant status): $w"
             else
-              fm_wake_append stale "$w" "stale: $w" || exit 1
+              reason=$(terminal_wait_open_decision_reason "$w" "$task" 2>/dev/null || true)
+              [ -n "$reason" ] || reason="stale: $w"
+              fm_wake_append stale "$w" "$reason" || exit 1
               printf '%s' "$h" > "$sf"
               rm -f "$ssf"
               mark_surfaced "$STATE/$(window_to_task "$w" "$STATE").status"
-              wake "stale: $w"
+              wake "$reason"
             fi
           elif [ -e "$ssf" ]; then
             # This exact hash was already overridden as provably-working (a
@@ -1113,7 +1131,8 @@ EOF
                 handle_paused_stale "$w" "$task" "$h"
                 ;;
               *)
-                surface_nonterminal_stale "$w" "$h"
+                reason=$(terminal_wait_open_decision_reason "$w" "$task" 2>/dev/null || true)
+                surface_nonterminal_stale "$w" "$h" "$reason"
                 ;;
             esac
           else
