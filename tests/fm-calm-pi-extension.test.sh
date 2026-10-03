@@ -701,7 +701,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const extPath = fileURLToPath(pathToFileURL(process.env.EXT).href);
 
 const packageRoot = process.env.PI_PACKAGE_DIR;
-const [{ AssistantMessageComponent }, { CustomEntryComponent }, { ToolExecutionComponent }, { UserMessageComponent }, { InteractiveMode }, { initTheme, theme }, { Text, getKeybindings, setCapabilities }, { createToolHtmlRenderer }] = await Promise.all([
+const [{ AssistantMessageComponent }, { CustomEntryComponent }, { ToolExecutionComponent }, { UserMessageComponent }, { InteractiveMode }, { initTheme, theme }, { Text, getKeybindings, setCapabilities }, { createEditToolDefinition }, { createToolHtmlRenderer }] = await Promise.all([
   import(pathToFileURL(`${packageRoot}/dist/modes/interactive/components/assistant-message.js`).href),
   import(pathToFileURL(`${packageRoot}/dist/modes/interactive/components/custom-entry.js`).href),
   import(pathToFileURL(`${packageRoot}/dist/modes/interactive/components/tool-execution.js`).href),
@@ -709,6 +709,7 @@ const [{ AssistantMessageComponent }, { CustomEntryComponent }, { ToolExecutionC
   import(pathToFileURL(`${packageRoot}/dist/modes/interactive/interactive-mode.js`).href),
   import(pathToFileURL(`${packageRoot}/dist/modes/interactive/theme/theme.js`).href),
   import(pathToFileURL(`${packageRoot}/node_modules/@earendil-works/pi-tui/dist/index.js`).href),
+  import(pathToFileURL(`${packageRoot}/dist/core/tools/edit.js`).href),
   import(pathToFileURL(`${packageRoot}/dist/core/export-html/tool-renderer.js`).href),
 ]);
 initTheme("dark");
@@ -827,6 +828,7 @@ const operationalMode = {
   chatContainer: operationalChat,
   editor: { addToHistory: (value) => operationalHistory.push(value) },
   getMarkdownThemeWithSettings: () => undefined,
+  getMarkdownTransformers: () => [],
   getUserMessageText: (message) => typeof message.content === "string"
     ? message.content
     : message.content.filter((item) => item.type === "text").map((item) => item.text).join(""),
@@ -878,6 +880,27 @@ const cases = [
   ["find", { pattern: "*.txt", path: "." }, { content: [{ type: "text", text: "sample.txt" }], details: {}, isError: false }],
   ["ls", { path: "." }, { content: [{ type: "text", text: "sample.txt" }], details: {}, isError: false }],
 ];
+const wrappedEdit = tools.find((tool) => tool.name === "edit");
+if (!wrappedEdit?.renderCall) throw new Error("wrapped edit renderer was not registered");
+const originalWrappedEditRenderCall = wrappedEdit.renderCall.bind(wrappedEdit);
+let liveEditInvalidate;
+let resolveNaturalEditInvalidation;
+const naturalEditInvalidation = new Promise((resolve) => {
+  resolveNaturalEditInvalidation = resolve;
+});
+wrappedEdit.renderCall = (args, renderTheme, context) => {
+  if (context.toolCallId !== "wrapped-edit") {
+    return originalWrappedEditRenderCall(args, renderTheme, context);
+  }
+  liveEditInvalidate = context.invalidate;
+  return originalWrappedEditRenderCall(args, renderTheme, {
+    ...context,
+    invalidate: () => {
+      resolveNaturalEditInvalidation();
+      context.invalidate();
+    },
+  });
+};
 const renderUi = { requestRender() {} };
 const rows = [];
 for (const [name, args, result] of cases) {
@@ -1194,16 +1217,33 @@ for (const { name, actual } of rows) {
     throw new Error(`${name} was not hidden before export rendering`);
   }
 }
-async function assertStockHtmlRendering(command, submitData) {
+await Promise.race([
+  naturalEditInvalidation,
+  new Promise((_, reject) =>
+    setTimeout(() => reject(new Error("Pi edit preview did not invalidate its live row")), 1000),
+  ),
+]);
+if (!liveEditInvalidate) throw new Error("Pi edit renderer did not expose a live invalidation");
+const liveEditRow = rows.find((row) => row.name === "edit").actual;
+async function assertStockHtmlRendering(command, submitData, editInvalidationPhase) {
   editorText = command;
   terminalInputHandler(submitData);
+  if (editInvalidationPhase === "during-export") liveEditInvalidate();
   const htmlRenderer = createToolHtmlRenderer({
     getToolDefinition: (name) => tools.find((tool) => tool.name === name),
     theme,
     cwd: process.cwd(),
   });
+  const stockEdit = createEditToolDefinition(process.cwd());
+  const stockEditHtmlRenderer = createToolHtmlRenderer({
+    getToolDefinition: (name) => name === "edit" ? stockEdit : undefined,
+    theme,
+    cwd: process.cwd(),
+  });
   const exportCases = [
-    ...cases.filter(([toolName]) => toolName === "grep" || toolName === "find"),
+    ...cases.filter(
+      ([toolName]) => toolName === "edit" || toolName === "grep" || toolName === "find",
+    ),
     ["fm_watch_arm_pi", watchArgs, watchResult],
   ];
   for (const [name, args, result] of exportCases) {
@@ -1216,15 +1256,43 @@ async function assertStockHtmlRendering(command, submitData) {
       result.details,
       result.isError,
     );
+    if (name === "edit") {
+      const stockToolCallId = `${toolCallId}-stock`;
+      const stockCallHtml = stockEditHtmlRenderer.renderCall(stockToolCallId, name, args);
+      const stockResultHtml = stockEditHtmlRenderer.renderResult(
+        stockToolCallId,
+        name,
+        result.content,
+        result.details,
+        result.isError,
+      );
+      if (
+        resultHtml === undefined ||
+        callHtml !== stockCallHtml ||
+        JSON.stringify(resultHtml) !== JSON.stringify(stockResultHtml)
+      ) {
+        throw new Error(`${name} changed from stock Pi in ${command} HTML`);
+      }
+      continue;
+    }
     if (!callHtml || !resultHtml?.expanded) {
       throw new Error(`${name} disappeared from ${command} HTML while calm mode was on`);
     }
   }
   editorText = "";
   await new Promise((resolve) => setTimeout(resolve, 0));
+  if (liveEditRow.render(100).length !== 0) {
+    throw new Error(`edit invalidation during ${command} left a residual live tool row`);
+  }
+  if (editInvalidationPhase === "after-reset") {
+    liveEditInvalidate();
+    if (liveEditRow.render(100).length !== 0) {
+      throw new Error(`edit invalidation after ${command} reset restored a live tool row`);
+    }
+  }
 }
 
-await assertStockHtmlRendering("/export calm.html", "\r");
+await assertStockHtmlRendering("/export calm.html", "\r", "during-export");
 getKeybindings().setUserBindings({ "tui.input.submit": "alt+s" });
 editorText = "/export remapped.html";
 terminalInputHandler("\r");
@@ -1237,7 +1305,7 @@ if (unmatchedRenderer.renderCall("unmatched-submit", "grep", { pattern: "alpha",
   throw new Error("ordinary non-submit input activated HTML export rendering");
 }
 editorText = "";
-await assertStockHtmlRendering("/share", "\x1bs");
+await assertStockHtmlRendering("/share", "\x1bs", "after-reset");
 for (const { name, actual } of rows) {
   const rendered = actual.render(100);
   if (rendered.length !== 0) {
@@ -2864,6 +2932,7 @@ test_interactive_terminal_e2e() {
   mkdir -p "$project/.pi/extensions/lib" "$project/bin" "$project/state" "$config" "$home/config"
   fm_git_init_commit "$project"
   : > "$project/AGENTS.md"
+  printf 'CALM_EDIT_BEFORE\n' > "$project/calm-edit.txt"
   cp "$EXT" "$project/.pi/extensions/fm-calm.ts"
   cp "$ASSISTANT_LAYOUT" "$project/.pi/extensions/lib/fm-calm-assistant-layout.ts"
   cp "$OPERATIONAL_USER_LAYOUT" "$project/.pi/extensions/lib/fm-calm-operational-user-layout.ts"
@@ -3062,7 +3131,9 @@ TS
 {"type":"message","id":"a0000013","parentId":"a0000012","timestamp":"$now","message":{"role":"user","content":[{"type":"text","text":"FIRSTMATE_OP: v1 watcher: ASCII_ONLY_NEAR_MISS"}],"timestamp":13}}
 {"type":"message","id":"a0000014","parentId":"a0000013","timestamp":"$now","message":{"role":"user","content":[{"type":"text","text":"Ordinary captain text before \u2063FIRSTMATE_OP: v1 watcher: EMBEDDED_CURRENT_NEAR_MISS"}],"timestamp":14}}
 {"type":"message","id":"a0000015","parentId":"a0000014","timestamp":"$now","message":{"role":"user","content":[{"type":"text","text":"\u2063ordinary captain text after unrelated separator"}],"timestamp":15}}
-{"type":"message","id":"a0000016","parentId":"a0000015","timestamp":"$now","message":{"role":"assistant","content":[{"type":"text","text":"The deterministic tool example is complete."}],"api":"anthropic-messages","provider":"anthropic","model":"claude-sonnet-4-5","usage":{"input":2,"output":1,"cacheRead":0,"cacheWrite":0,"totalTokens":3,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}},"stopReason":"stop","timestamp":16}}
+{"type":"message","id":"b0000015","parentId":"a0000015","timestamp":"$now","message":{"role":"assistant","content":[{"type":"toolCall","id":"call_edit_e2e","name":"edit","arguments":{"path":"calm-edit.txt","edits":[{"oldText":"CALM_EDIT_BEFORE","newText":"CALM_EDIT_AFTER"}]}}],"api":"anthropic-messages","provider":"anthropic","model":"claude-sonnet-4-5","usage":{"input":2,"output":1,"cacheRead":0,"cacheWrite":0,"totalTokens":3,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}},"stopReason":"toolUse","timestamp":16}}
+{"type":"message","id":"b0000016","parentId":"b0000015","timestamp":"$now","message":{"role":"toolResult","toolCallId":"call_edit_e2e","toolName":"edit","content":[{"type":"text","text":"Successfully replaced 1 block(s) in calm-edit.txt."}],"details":{"diff":"-CALM_EDIT_BEFORE\n+CALM_EDIT_AFTER","patch":"","firstChangedLine":1},"isError":false,"timestamp":17}}
+{"type":"message","id":"a0000016","parentId":"b0000016","timestamp":"$now","message":{"role":"assistant","content":[{"type":"text","text":"The deterministic tool example is complete."}],"api":"anthropic-messages","provider":"anthropic","model":"claude-sonnet-4-5","usage":{"input":2,"output":1,"cacheRead":0,"cacheWrite":0,"totalTokens":3,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}},"stopReason":"stop","timestamp":18}}
 JSON
 
   tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" -x 180 -y 44 \
@@ -3254,17 +3325,21 @@ JS
   node - "$export_file" <<'JS' || fail "calm-mode HTML export lost tool data or persisted synthetic provenance"
 const html = require("node:fs").readFileSync(process.argv[2], "utf8");
 const match = html.match(/<script id="session-data" type="application\/json">([^<]+)<\/script>/);
-if (!match) process.exit(1);
+if (!match) throw new Error("export omitted embedded session data");
 const session = JSON.parse(Buffer.from(match[1], "base64").toString("utf8"));
 for (const id of ["call_grep_e2e", "call_find_e2e", "call_watch_e2e"]) {
   const rendered = session.renderedTools?.[id];
-  if (!rendered?.callHtml || !rendered?.resultHtmlExpanded) process.exit(1);
+  if (!rendered?.callHtml || !rendered?.resultHtmlExpanded) {
+    throw new Error(`export omitted stock ${id} rendering: ${JSON.stringify(rendered)}`);
+  }
 }
 const entries = session.session?.entries ?? session.entries ?? [];
 const serialized = JSON.stringify(entries);
-if (!serialized.includes("firstmate-synthetic-input") || !serialized.includes("/tmp/probe.status")) process.exit(1);
+if (!serialized.includes("firstmate-synthetic-input") || !serialized.includes("/tmp/probe.status")) {
+  throw new Error("export omitted synthetic provenance");
+}
 const synthetic = entries.find((entry) => entry.type === "custom_message" && entry.customType === "firstmate-synthetic-input");
-if (!synthetic || synthetic.display) process.exit(1);
+if (!synthetic || synthetic.display) throw new Error("export changed hidden synthetic provenance");
 JS
   if chrome=$(find_chrome); then
     "$chrome" \
@@ -3293,6 +3368,7 @@ const tree = dom.match(/<div[^>]*id="tree-container"[^>]*>([\s\S]*?)<div[^>]*id=
 if (!messages || !tree) process.exit(1);
 if (!/<div class="user-message"[^>]*>[\s\S]*Show a deterministic tool example\./.test(messages)) process.exit(1);
 if (!/<div class="assistant-message"[^>]*>[\s\S]*The deterministic tool example is complete\./.test(messages)) process.exit(1);
+if (!messages.includes("calm-edit.txt") || !messages.includes("CALM_EDIT_AFTER")) process.exit(1);
 if (messages.includes('<div class="hook-message"')) process.exit(1);
 if (messages.includes("[firstmate-synthetic-input]")) process.exit(1);
 for (const current of ["CURRENT_WATCHER_E2E", "CURRENT_TURN_END_E2E", "CURRENT_AWAY_E2E", "CURRENT_FROM_FIRSTMATE_E2E", "CURRENT_LAUNCH_BRIEF_E2E"]) {
