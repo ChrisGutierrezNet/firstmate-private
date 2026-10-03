@@ -558,7 +558,8 @@ if [ "$READ_ONLY" -eq 0 ]; then
   # steer, or merge anyway, so it has no action left for an auth verdict to gate.
   NETWORK_STAGE_LOCKED=1
   [ "$REEMIT" -eq 0 ] || NETWORK_STAGE_LOCKED=0
-  "$SCRIPT_DIR/fm-startup-network.sh" start \
+  FM_TASKS_AXI_COMPATIBLE="$TASKS_AXI_COMPATIBLE" \
+    "$SCRIPT_DIR/fm-startup-network.sh" start \
     --locked "$NETWORK_STAGE_LOCKED" --harvest-pid $$ >/dev/null 2>&1 || true
 fi
 
@@ -606,7 +607,8 @@ if [ "$READ_ONLY" -eq 1 ]; then
   GUARD_OUT=$(FM_GUARD_READ_ONLY=1 "$SCRIPT_DIR/fm-guard.sh" 2>&1)
   [ -n "$GUARD_OUT" ] && printf '%s\n' "$GUARD_OUT"
 else
-  DRAIN_OUT=$("$SCRIPT_DIR/fm-wake-drain.sh" 2>&1)
+  DRAIN_OUT=$(FM_TASKS_AXI_COMPATIBLE="$FM_TASKS_AXI_COMPATIBLE_MEMO" \
+    "$SCRIPT_DIR/fm-wake-drain.sh" 2>&1)
   if [ -n "$DRAIN_OUT" ]; then
     printf '%s\n' "$DRAIN_OUT"
   else

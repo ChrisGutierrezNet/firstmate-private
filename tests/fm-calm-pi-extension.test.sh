@@ -827,6 +827,7 @@ const operationalMode = {
   chatContainer: operationalChat,
   editor: { addToHistory: (value) => operationalHistory.push(value) },
   getMarkdownThemeWithSettings: () => undefined,
+  getMarkdownTransformers: () => [],
   getUserMessageText: (message) => typeof message.content === "string"
     ? message.content
     : message.content.filter((item) => item.type === "text").map((item) => item.text).join(""),
@@ -878,6 +879,27 @@ const cases = [
   ["find", { pattern: "*.txt", path: "." }, { content: [{ type: "text", text: "sample.txt" }], details: {}, isError: false }],
   ["ls", { path: "." }, { content: [{ type: "text", text: "sample.txt" }], details: {}, isError: false }],
 ];
+const wrappedEdit = tools.find((tool) => tool.name === "edit");
+if (!wrappedEdit?.renderCall) throw new Error("wrapped edit renderer was not registered");
+const originalWrappedEditRenderCall = wrappedEdit.renderCall.bind(wrappedEdit);
+let liveEditInvalidate;
+let resolveNaturalEditInvalidation;
+const naturalEditInvalidation = new Promise((resolve) => {
+  resolveNaturalEditInvalidation = resolve;
+});
+wrappedEdit.renderCall = (args, renderTheme, context) => {
+  if (context.toolCallId !== "wrapped-edit") {
+    return originalWrappedEditRenderCall(args, renderTheme, context);
+  }
+  liveEditInvalidate = context.invalidate;
+  return originalWrappedEditRenderCall(args, renderTheme, {
+    ...context,
+    invalidate: () => {
+      resolveNaturalEditInvalidation();
+      context.invalidate();
+    },
+  });
+};
 const renderUi = { requestRender() {} };
 const rows = [];
 for (const [name, args, result] of cases) {
@@ -1194,16 +1216,27 @@ for (const { name, actual } of rows) {
     throw new Error(`${name} was not hidden before export rendering`);
   }
 }
-async function assertStockHtmlRendering(command, submitData) {
+await Promise.race([
+  naturalEditInvalidation,
+  new Promise((_, reject) =>
+    setTimeout(() => reject(new Error("Pi edit preview did not invalidate its live row")), 1000),
+  ),
+]);
+if (!liveEditInvalidate) throw new Error("Pi edit renderer did not expose a live invalidation");
+const liveEditRow = rows.find((row) => row.name === "edit").actual;
+async function assertStockHtmlRendering(command, submitData, editInvalidationPhase) {
   editorText = command;
   terminalInputHandler(submitData);
+  if (editInvalidationPhase === "during-export") liveEditInvalidate();
   const htmlRenderer = createToolHtmlRenderer({
     getToolDefinition: (name) => tools.find((tool) => tool.name === name),
     theme,
     cwd: process.cwd(),
   });
   const exportCases = [
-    ...cases.filter(([toolName]) => toolName === "grep" || toolName === "find"),
+    ...cases.filter(
+      ([toolName]) => toolName === "edit" || toolName === "grep" || toolName === "find",
+    ),
     ["fm_watch_arm_pi", watchArgs, watchResult],
   ];
   for (const [name, args, result] of exportCases) {
@@ -1222,9 +1255,18 @@ async function assertStockHtmlRendering(command, submitData) {
   }
   editorText = "";
   await new Promise((resolve) => setTimeout(resolve, 0));
+  if (liveEditRow.render(100).length !== 0) {
+    throw new Error(`edit invalidation during ${command} left a residual live tool row`);
+  }
+  if (editInvalidationPhase === "after-reset") {
+    liveEditInvalidate();
+    if (liveEditRow.render(100).length !== 0) {
+      throw new Error(`edit invalidation after ${command} reset restored a live tool row`);
+    }
+  }
 }
 
-await assertStockHtmlRendering("/export calm.html", "\r");
+await assertStockHtmlRendering("/export calm.html", "\r", "during-export");
 getKeybindings().setUserBindings({ "tui.input.submit": "alt+s" });
 editorText = "/export remapped.html";
 terminalInputHandler("\r");
@@ -1237,7 +1279,7 @@ if (unmatchedRenderer.renderCall("unmatched-submit", "grep", { pattern: "alpha",
   throw new Error("ordinary non-submit input activated HTML export rendering");
 }
 editorText = "";
-await assertStockHtmlRendering("/share", "\x1bs");
+await assertStockHtmlRendering("/share", "\x1bs", "after-reset");
 for (const { name, actual } of rows) {
   const rendered = actual.render(100);
   if (rendered.length !== 0) {

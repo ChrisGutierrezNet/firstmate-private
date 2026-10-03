@@ -188,6 +188,24 @@ export default function (pi: ExtensionAPI) {
     });
   };
 
+  const stockExportComponents = new WeakMap<Component, Component>();
+  const wrapStockExportComponent = (
+    component: Component,
+    itemClass: "assistant-tool-call" | "tool-result",
+  ): Component => {
+    const wrapped: Component = {
+      invalidate: () => component.invalidate(),
+      render: (width) =>
+        calmPresentationHides(itemClass) ? [] : component.render(width),
+    };
+    stockExportComponents.set(wrapped, component);
+    return wrapped;
+  };
+  const stockExportLastComponent = (
+    component: Component | undefined,
+  ): Component | undefined =>
+    component ? stockExportComponents.get(component) ?? component : undefined;
+
   registerFirstmateSyntheticPresentation(pi);
 
   function wrapBuiltIn<TParams extends TSchema, TDetails, TState>(
@@ -257,7 +275,15 @@ export default function (pi: ExtensionAPI) {
         theme: RenderTheme<TParams, TDetails, TState>,
         context: RenderContext<TParams, TDetails, TState>,
       ) {
-        if (exportRendering) return originalRenderCall(args, theme, context);
+        if (exportRendering) {
+          return wrapStockExportComponent(
+            originalRenderCall(args, theme, {
+              ...context,
+              lastComponent: stockExportLastComponent(context.lastComponent),
+            }),
+            "assistant-tool-call",
+          );
+        }
         if (calmPresentationHides("assistant-tool-call")) return new Container();
         if (originalSelfShell) return originalRenderCall(args, theme, context);
 
@@ -275,7 +301,15 @@ export default function (pi: ExtensionAPI) {
         theme: RenderTheme<TParams, TDetails, TState>,
         context: RenderContext<TParams, TDetails, TState>,
       ) {
-        if (exportRendering) return originalRenderResult(result, options, theme, context);
+        if (exportRendering) {
+          return wrapStockExportComponent(
+            originalRenderResult(result, options, theme, {
+              ...context,
+              lastComponent: stockExportLastComponent(context.lastComponent),
+            }),
+            "tool-result",
+          );
+        }
         if (calmPresentationHides("tool-result")) return new Container();
         if (originalSelfShell) return originalRenderResult(result, options, theme, context);
 
@@ -418,9 +452,7 @@ export default function (pi: ExtensionAPI) {
         exportRendering = false;
         setCalmStockExportRendering(false);
         publishPresentationState();
-        const expanded = ctx.ui.getToolsExpanded();
-        ctx.ui.setToolsExpanded(!expanded);
-        ctx.ui.setToolsExpanded(expanded);
+        ctx.ui.setStatus("firstmate-calm", undefined);
       }, 0);
     });
   });

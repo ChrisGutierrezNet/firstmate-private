@@ -36,12 +36,19 @@
 
 FM_TASKS_AXI_MIN=0.2.4
 
-FM_TASKS_AXI_COMPATIBLE_MEMO=${FM_TASKS_AXI_COMPATIBLE:-}
-unset FM_TASKS_AXI_COMPATIBLE
-case "$FM_TASKS_AXI_COMPATIBLE_MEMO" in
-  0|1) ;;
-  *) FM_TASKS_AXI_COMPATIBLE_MEMO= ;;
-esac
+# Several higher-level sourceable libraries depend on this owner and can be
+# loaded by the same process. Consume the one-hop verdict and initialize its
+# process-local memo only once; a second source must preserve the first probe or
+# inherited verdict instead of silently resetting it.
+if [ "${FM_TASKS_AXI_LIB_INITIALIZED:-0}" != 1 ]; then
+  FM_TASKS_AXI_LIB_INITIALIZED=1
+  FM_TASKS_AXI_COMPATIBLE_MEMO=${FM_TASKS_AXI_COMPATIBLE:-}
+  unset FM_TASKS_AXI_COMPATIBLE
+  case "$FM_TASKS_AXI_COMPATIBLE_MEMO" in
+    0|1) ;;
+    *) FM_TASKS_AXI_COMPATIBLE_MEMO= ;;
+  esac
+fi
 
 fm_tasks_axi_version_parts() {
   local output

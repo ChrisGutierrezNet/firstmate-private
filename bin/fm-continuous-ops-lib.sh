@@ -69,9 +69,11 @@ fm_continuous_ops_github_refresh() {  # <reason>
   [ "${FM_CONTINUOUS_OPS_GITHUB_DISABLE:-0}" != 1 ] || return 0
   [ -x "$FM_CONTINUOUS_OPS_GITHUB_BIN" ] || return 0
   if [ "${FM_CONTINUOUS_OPS_GITHUB_FORCE:-0}" = 1 ]; then
-    "$FM_CONTINUOUS_OPS_GITHUB_BIN" refresh --force --reason "$reason" >/dev/null 2>&1
+    FM_TASKS_AXI_COMPATIBLE="$FM_TASKS_AXI_COMPATIBLE_MEMO" \
+      "$FM_CONTINUOUS_OPS_GITHUB_BIN" refresh --force --reason "$reason" >/dev/null 2>&1
   else
-    "$FM_CONTINUOUS_OPS_GITHUB_BIN" refresh --reason "$reason" >/dev/null 2>&1
+    FM_TASKS_AXI_COMPATIBLE="$FM_TASKS_AXI_COMPATIBLE_MEMO" \
+      "$FM_CONTINUOUS_OPS_GITHUB_BIN" refresh --reason "$reason" >/dev/null 2>&1
   fi
 }
 
