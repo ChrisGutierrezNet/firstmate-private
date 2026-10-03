@@ -15,6 +15,8 @@ STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 
 # shellcheck source=bin/fm-pr-lib.sh
 . "$SCRIPT_DIR/fm-pr-lib.sh"
+# shellcheck source=bin/fm-captain-notify-lib.sh
+. "$SCRIPT_DIR/fm-captain-notify-lib.sh"
 
 if [ "$#" -ne 2 ]; then
   echo "error: invalid PR check request" >&2
@@ -120,3 +122,8 @@ fm_pr_poll_publish_prepared || {
   exit 1
 }
 printf 'armed: state/%s.check.sh\n' "$ID"
+if [ "${FM_PR_CHECK_SKIP_NOTIFY:-0}" != 1 ]; then
+  fm_captain_notify_nonblocking "pr-ready:$ID:$URL" "Captain, PR ready for review.
+
+$URL"
+fi

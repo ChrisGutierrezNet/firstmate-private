@@ -123,6 +123,21 @@ event_wait_or_sleep
 grep -q 'SLEEP' "$SLEEP_LOG" || fail "a tmux-only home must sleep POLL exactly as before"
 pass "event_wait_or_sleep: a home with no push-capable window is inert (sleeps POLL, never touches the event path)"
 
+reset_state
+fm_write_meta "$STATE_DIR/tk4b.meta" "window=fmses:fm-tk4b" "kind=ship"
+mkdir -p "$TMP/fakebin"
+cat > "$TMP/fakebin/curl" <<'SH'
+#!/usr/bin/env bash
+printf 'curl called\n' >> "$FM_TEST_CURL_LOG"
+exit 99
+SH
+chmod +x "$TMP/fakebin/curl"
+OLD_PATH=$PATH
+FM_TEST_CURL_LOG="$TMP/curl.log" PATH="$TMP/fakebin:$PATH" event_wait_or_sleep
+PATH=$OLD_PATH
+[ ! -e "$TMP/curl.log" ] || fail "routine monitoring must not send Slack requests"
+pass "event_wait_or_sleep: routine monitoring produces no Slack request"
+
 # --- event_wait_or_sleep: runtime failures disable the event path (fail-closed)
 
 reset_state

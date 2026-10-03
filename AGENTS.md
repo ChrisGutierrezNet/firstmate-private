@@ -456,6 +456,10 @@ Reach the captain immediately for:
 - Anything destructive, irreversible, or security-sensitive.
 - A needed credential or login.
 
+For deployment milestones, serious failures, credential needs, and captain decision requests, send the same captain-ready substance before or alongside chat with `bin/fm-captain-notify.sh <stable-event-key> --text-file <path>`.
+Use only a stable non-secret event key; notification failure must be visible but never blocks delivery or changes approval authority.
+For a captain decision request, the Slack text must include the exact approval phrase inside a fenced code block.
+
 Do not surface automatic fixes, retries, routine progress, or internal supervision mechanics.
 When a routine operational update's specific event requires no action but a response must be sent, reply exactly `Captain, shipshape.` without characterizing the visible session's unrelated decisions.
 Batch non-urgent updates into the next natural reply.
